@@ -154,9 +154,44 @@ export function AuditoriaTab() {
       </div>
 
       <div className="rounded-lg border bg-card p-4">
+        <h3 className="mb-3 text-sm font-semibold">
+          Resumo por arquivo ({fileSummary.length})
+        </h3>
+        <div className="overflow-x-auto rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Arquivo</TableHead>
+                <TableHead className="text-right">Inconsistências</TableHead>
+                <TableHead>Regras envolvidas</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {fileSummary.map((s) => (
+                <TableRow key={s.file} className="bg-destructive/5">
+                  <TableCell className="font-medium">{s.file}</TableCell>
+                  <TableCell className="text-right">
+                    <Badge variant="destructive">{s.findings}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">{s.rules.join(", ")}</TableCell>
+                </TableRow>
+              ))}
+              {!fileSummary.length && (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-sm text-muted-foreground">
+                    Nenhuma inconsistência por arquivo.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">
-            Inconsistencias encontradas ({findings.length})
+            Inconsistências encontradas ({findings.length})
           </h3>
         </div>
         <div className="overflow-x-auto rounded-md border">
@@ -166,13 +201,14 @@ export function AuditoriaTab() {
                 <TableHead>Regra</TableHead>
                 <TableHead>Chave</TableHead>
                 <TableHead>Coluna</TableHead>
-                <TableHead>Valores distintos</TableHead>
+                <TableHead>Arquivos</TableHead>
+                <TableHead>Valores por arquivo</TableHead>
                 <TableHead>IDs do Revit</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {findings.map((f, i) => (
-                <TableRow key={i} className="bg-destructive/5">
+                <TableRow key={i} className="bg-destructive/5 align-top">
                   <TableCell>
                     <Badge variant="destructive">{f.ruleName}</Badge>
                   </TableCell>
@@ -182,7 +218,24 @@ export function AuditoriaTab() {
                       .join(" | ")}
                   </TableCell>
                   <TableCell className="font-medium">{f.inconsistentColumn}</TableCell>
-                  <TableCell className="text-xs">{f.values.join(" / ")}</TableCell>
+                  <TableCell className="text-xs">
+                    <div className="flex flex-wrap gap-1">
+                      {f.files.map((fl) => (
+                        <Badge key={fl} variant="outline" className="text-[10px]">
+                          {fl}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <div className="space-y-0.5">
+                      {Object.entries(f.valuesByFile).map(([fl, vals]) => (
+                        <div key={fl}>
+                          <span className="font-medium">{fl}:</span> {vals.join(" / ")}
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <button
                       className="text-xs text-primary hover:underline"
@@ -198,8 +251,8 @@ export function AuditoriaTab() {
               ))}
               {!findings.length && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                    Nenhuma inconsistencia.
+                  <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                    Nenhuma inconsistência.
                   </TableCell>
                 </TableRow>
               )}
