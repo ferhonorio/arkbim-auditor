@@ -50,6 +50,7 @@ import type { Filter, FilterOp } from "@/lib/grouping";
 import {
   detectNewFiles,
   previewConsolidation,
+  selectListRows,
   type ComponentList,
   type ConsolidationMode,
 } from "@/lib/component-lists";
