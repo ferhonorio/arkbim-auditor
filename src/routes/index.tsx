@@ -3,7 +3,6 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
-import { Button } from "@/components/ui/button";
 import { FileUploader } from "@/components/ark/FileUploader";
 import { FiltersPanel } from "@/components/ark/FiltersPanel";
 import { ColumnsPanel } from "@/components/ark/ColumnsPanel";
@@ -99,6 +98,3 @@ function Index() {
     </div>
   );
 }
-
-// Suppress unused warning
-void Button;
