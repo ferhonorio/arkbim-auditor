@@ -68,11 +68,30 @@ export function AuditoriaTab() {
       Regra: f.ruleName,
       Coluna: f.inconsistentColumn,
       ...f.groupValues,
+      Arquivos: f.files.join(", "),
+      "Valores por arquivo": Object.entries(f.valuesByFile)
+        .map(([file, vals]) => `${file}: ${vals.join(" | ")}`)
+        .join("  ||  "),
       Valores: f.values.join(", "),
       IDs: f.ids.join(", "),
     }));
     exportXLSX("arkbim-auditoria.xlsx", [{ name: "Auditoria", rows: data }]);
   };
+
+  const fileSummary = useMemo(() => {
+    const map = new Map<string, { findings: number; rules: Set<string> }>();
+    for (const f of findings) {
+      for (const file of f.files) {
+        if (!map.has(file)) map.set(file, { findings: 0, rules: new Set() });
+        const e = map.get(file)!;
+        e.findings += 1;
+        e.rules.add(f.ruleName);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([file, v]) => ({ file, findings: v.findings, rules: Array.from(v.rules) }))
+      .sort((a, b) => b.findings - a.findings);
+  }, [findings]);
 
   return (
     <div className="space-y-4">
