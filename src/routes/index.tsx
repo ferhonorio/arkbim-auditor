@@ -30,6 +30,9 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [collapsed, setCollapsed] = useState(false);
   const dataset = useArk((s) => s.dataset);
+  useEffect(() => {
+    installGlobalErrorCapture();
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-background">
