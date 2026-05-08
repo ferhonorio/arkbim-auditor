@@ -1,4 +1,4 @@
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Save, Trash2 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import {
   Select,
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Filter, FilterOp } from "@/lib/grouping";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const OPS: FilterOp[] = [
   "preenchido",
@@ -25,6 +26,10 @@ export function FiltersPanel() {
   const dataset = useArk((s) => s.dataset);
   const filters = useArk((s) => s.filters);
   const setFilters = useArk((s) => s.setFilters);
+  const presets = useArk((s) => s.filterPresets);
+  const savePreset = useArk((s) => s.saveFilterPreset);
+  const loadPreset = useArk((s) => s.loadFilterPreset);
+  const deletePreset = useArk((s) => s.deleteFilterPreset);
   const [open, setOpen] = useState(true);
 
   const cols = dataset?.columns ?? [];
@@ -38,6 +43,14 @@ export function FiltersPanel() {
   const remove = (id: string) => setFilters(filters.filter((f) => f.id !== id));
   const update = (id: string, patch: Partial<Filter>) =>
     setFilters(filters.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+
+  const handleSave = () => {
+    const name = window.prompt("Nome do preset de filtros:");
+    if (name?.trim()) {
+      savePreset(name.trim());
+      toast.success("Filtro salvo");
+    }
+  };
 
   return (
     <div className="rounded-lg border bg-card p-3">
