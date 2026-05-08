@@ -212,6 +212,8 @@ export const useArk = create<ArkState>()(
         pageSize: s.pageSize,
         auditRules: s.auditRules,
         consolidationConfig: s.consolidationConfig,
+        consolidatedSnapshot: s.consolidatedSnapshot,
+        onlyRuleMatches: s.onlyRuleMatches,
         filterPresets: s.filterPresets,
         rulePresets: s.rulePresets,
         groupingPresets: s.groupingPresets,
