@@ -106,6 +106,12 @@ export function AnaliseTab() {
     [visualRules, ruleFiltered],
   );
 
+  // Pre-compute full eval per rule for tooltips ("por quê?")
+  const evalsPerRule = useMemo(
+    () => visualRules.map((r) => evaluateRule(r, ruleFiltered)),
+    [visualRules, ruleFiltered],
+  );
+
   // Live diagnostics per rule for inline feedback
   const ruleStats = useMemo(
     () =>
