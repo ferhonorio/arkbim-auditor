@@ -135,6 +135,7 @@ export interface VisualRule {
 // Returns map of key -> { inconsistent: boolean; files: string[]; rows: Row[] }
 export interface RuleKeyEval {
   inconsistent: boolean;
+  comparable: boolean; // false quando há apenas 1 linha com essa chave (nada a comparar)
   files: string[];
   rowsCount: number;
   diffByColumn: Record<string, string[]>;
@@ -161,7 +162,6 @@ export function evaluateRule(
     const diffByColumn: Record<string, string[]> = {};
     let divergentCount = 0;
     // Só faz sentido comparar quando há mais de uma linha compartilhando a chave.
-    // Se houver apenas 1 linha, não há com o que comparar -> nunca inconsistente.
     const comparable = grp.length > 1;
     if (comparable) {
       for (const c of cmpCols) {
@@ -191,6 +191,7 @@ export function evaluateRule(
     for (const c of keyCols) keyValues[c] = (grp[0][c] ?? "").trim();
     out.set(k, {
       inconsistent,
+      comparable,
       files: Array.from(filesSet),
       rowsCount: grp.length,
       diffByColumn,
@@ -225,6 +226,8 @@ export function computeMatchingKeys(rule: VisualRule, rows: Row[]): Set<string> 
   const evals = evaluateRule(rule, rows);
   const wantInconsistent = (rule.applyWhen ?? "inconsistent") === "inconsistent";
   for (const [k, ev] of evals) {
+    // Chave sem comparáveis (1 só linha) nunca casa com regra visual
+    if (!ev.comparable) continue;
     if (wantInconsistent ? ev.inconsistent : !ev.inconsistent) out.add(k);
   }
   return out;
