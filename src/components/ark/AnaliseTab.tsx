@@ -99,11 +99,12 @@ export function AnaliseTab() {
     [ruleFiltered, groupBy, concatCols, concatStrategy],
   );
 
-  // Pre-compute rule evaluation on the SEARCHED base (not ruleFiltered) so the
-  // toggle "show only matches" doesn't change which keys count as comparable.
+  // Evaluate visual rules against the GROUPED rows that are currently visible.
+  // This guarantees: an item that appears alone in the displayed table is never
+  // flagged, even if the same key exists elsewhere in the raw data.
   const evalsPerRule = useMemo(
-    () => visualRules.map((r) => evaluateRule(r, searched)),
-    [visualRules, searched],
+    () => visualRules.map((r) => evaluateRuleOnGroups(r, groups)),
+    [visualRules, groups],
   );
 
   // Pre-compute matching keys per rule from the same base.
