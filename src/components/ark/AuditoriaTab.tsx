@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useArk } from "@/lib/store";
-import { applyFilters, runAudit, type AuditRule } from "@/lib/grouping";
+import { applyFilters, compareToConsolidated, runAudit, type AuditRule } from "@/lib/grouping";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,12 +28,17 @@ export function AuditoriaTab() {
   const filters = useArk((s) => s.filters);
   const rules = useArk((s) => s.auditRules);
   const setRules = useArk((s) => s.setAuditRules);
+  const snapshot = useArk((s) => s.consolidatedSnapshot);
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
 
   const findings = useMemo(() => runAudit(filtered, rules), [filtered, rules]);
+  const consolidatedComp = useMemo(
+    () => (snapshot ? compareToConsolidated(filtered, snapshot) : null),
+    [filtered, snapshot],
+  );
 
   const ensureDefault = () => {
     if (rules.length) return;
