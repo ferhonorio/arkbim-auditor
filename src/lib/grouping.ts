@@ -94,22 +94,71 @@ export function groupRows(
   return Array.from(map.values());
 }
 
-// Visual rule: highlights groups where, after grouping, a given attribute has
-// more than one distinct value across the rawRows (inconsistency).
+// Visual rule: for a given common-key (keyColumns), the compareColumns must
+// have a single distinct value across all rows sharing that key. If any
+// compareColumn diverges, the key is "inconsistent" and groups whose rawRows
+// fall under that key get highlighted.
 export interface VisualRule {
   id: string;
-  column: string;
-  color: string; // tailwind bg utility or hex
-  label?: string;
+  name?: string;
+  keyColumns: string[]; // parametro(s) comum(ns) usados como chave
+  compareColumns: string[]; // parametros que devem ser iguais para a mesma chave
+  color: string;
 }
 
-export function ruleMatches(rule: VisualRule, g: GroupedRow): boolean {
-  const set = new Set<string>();
-  for (const r of g.rawRows) {
-    const v = (r[rule.column] ?? "").trim();
-    if (v) set.add(v);
+// Legacy shape support
+interface LegacyVisualRule { id: string; column?: string; color: string; name?: string }
+
+export function normalizeRule(r: VisualRule | LegacyVisualRule): VisualRule {
+  const anyR = r as VisualRule & LegacyVisualRule;
+  if (!anyR.keyColumns || !anyR.compareColumns) {
+    return {
+      id: anyR.id,
+      name: anyR.name,
+      color: anyR.color,
+      keyColumns: [],
+      compareColumns: anyR.column ? [anyR.column] : [],
+    };
   }
-  return set.size > 1;
+  return anyR;
+}
+
+export function computeInconsistentKeys(rule: VisualRule, rows: Row[]): Set<string> {
+  const bad = new Set<string>();
+  if (!rule.keyColumns.length || !rule.compareColumns.length) return bad;
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const k = buildKey(rule.keyColumns, r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  }
+  for (const [k, grp] of groups) {
+    for (const c of rule.compareColumns) {
+      const set = new Set<string>();
+      for (const r of grp) {
+        const v = (r[c] ?? "").trim().toLowerCase();
+        if (v) set.add(v);
+      }
+      if (set.size > 1) {
+        bad.add(k);
+        break;
+      }
+    }
+  }
+  return bad;
+}
+
+export function ruleMatchesGroup(
+  rule: VisualRule,
+  g: GroupedRow,
+  badKeys: Set<string>,
+): boolean {
+  if (!rule.keyColumns.length || !rule.compareColumns.length) return false;
+  for (const r of g.rawRows) {
+    const k = buildKey(rule.keyColumns, r);
+    if (badKeys.has(k)) return true;
+  }
+  return false;
 }
 
 // === Consolidated list ===
