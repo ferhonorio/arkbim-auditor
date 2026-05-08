@@ -248,6 +248,79 @@ export function computeMatchingKeys(rule: VisualRule, rows: Row[]): Set<string> 
 // Backwards-compatible alias
 export const computeInconsistentKeys = computeMatchingKeys;
 
+// Evaluate a visual rule against the GROUPED rows currently visible.
+// A key is "comparable" only when 2+ displayed grouped rows share it,
+// so an item that is alone in the visible table is never highlighted —
+// even if elsewhere in the raw data the same key appears with different values.
+export function evaluateRuleOnGroups(
+  rule: VisualRule,
+  groupsList: GroupedRow[],
+  fileColumn = "Nome do arquivo",
+): Map<string, RuleKeyEval> {
+  const out = new Map<string, RuleKeyEval>();
+  const keyCols = rule.keyColumns ?? [];
+  const cmpCols = rule.compareColumns ?? [];
+  if (!keyCols.length || !cmpCols.length) return out;
+  const buckets = new Map<string, GroupedRow[]>();
+  for (const g of groupsList) {
+    // Use the first raw row to read key columns (groupBy values are also stored
+    // in g.values, but key columns may not be part of groupBy).
+    const sample = g.rawRows[0];
+    if (!sample) continue;
+    const k = buildKey(keyCols, sample);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k)!.push(g);
+  }
+  const matchMode: VisualRuleMatchMode = rule.matchMode ?? "any";
+  for (const [k, gs] of buckets) {
+    const comparable = gs.length > 1;
+    const diffByColumn: Record<string, string[]> = {};
+    let divergentCount = 0;
+    let totalRawRows = 0;
+    const filesSet = new Set<string>();
+    for (const g of gs) {
+      totalRawRows += g.rawRows.length;
+      for (const r of g.rawRows) {
+        const f = (r[fileColumn] ?? "").trim();
+        if (f) filesSet.add(f);
+      }
+    }
+    if (comparable) {
+      for (const c of cmpCols) {
+        const set = new Set<string>();
+        for (const g of gs) {
+          for (const r of g.rawRows) {
+            const v = (r[c] ?? "").trim();
+            if (v) set.add(v);
+          }
+        }
+        if (set.size > 1) {
+          divergentCount++;
+          diffByColumn[c] = Array.from(set);
+        }
+      }
+    }
+    const inconsistent =
+      !comparable
+        ? false
+        : matchMode === "all"
+          ? divergentCount === cmpCols.length && divergentCount > 0
+          : divergentCount > 0;
+    const keyValues: Record<string, string> = {};
+    const sample = gs[0].rawRows[0];
+    for (const c of keyCols) keyValues[c] = (sample[c] ?? "").trim();
+    out.set(k, {
+      inconsistent,
+      comparable,
+      files: Array.from(filesSet),
+      rowsCount: totalRawRows,
+      diffByColumn,
+      keyValues,
+    });
+  }
+  return out;
+}
+
 export function ruleMatchesGroup(
   rule: VisualRule,
   g: GroupedRow,
