@@ -631,8 +631,8 @@ function ConsolidatedView({ list }: { list: ComponentList }) {
             {filtered.map((it) => {
               const open = expanded.has(it.key);
               return (
-                <>
-                  <TableRow key={it.key} className="hover:bg-accent/40">
+                <Fragment key={it.key}>
+                  <TableRow className="hover:bg-accent/40">
                     <TableCell>
                       <button onClick={() => toggleRow(it.key)}>
                         {open ? (
@@ -686,7 +686,7 @@ function ConsolidatedView({ list }: { list: ComponentList }) {
                     </TableCell>
                   </TableRow>
                   {open && (
-                    <TableRow key={it.key + "_d"} className="bg-muted/20">
+                    <TableRow className="bg-muted/20">
                       <TableCell />
                       <TableCell
                         colSpan={
@@ -712,7 +712,7 @@ function ConsolidatedView({ list }: { list: ComponentList }) {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </TableBody>
