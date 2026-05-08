@@ -108,7 +108,19 @@ export function groupRows(
       }
     }
   }
-  return Array.from(map.values());
+  const result = Array.from(map.values());
+  // Sort hierarchically by the chosen groupBy columns so divergent rows
+  // sharing the same prefix appear next to each other.
+  result.sort((a, b) => {
+    for (const c of groupBy) {
+      const av = (a.values[c] ?? "").toString();
+      const bv = (b.values[c] ?? "").toString();
+      const cmp = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
+  return result;
 }
 
 // Visual rule: for a given common-key (keyColumns), the compareColumns must
