@@ -384,17 +384,64 @@ function ListEditor({ list, onClose }: { list: ComponentList; onClose: () => voi
         </div>
       </div>
 
-      <div className="rounded-md border bg-background/50 p-3 text-xs">
-        <div className="font-medium">Pré-visualização</div>
-        <div className="text-muted-foreground">
-          {preview.length} item(ns) único(s) ·{" "}
-          {preview.reduce((s, p) => s + p.totalQuantity, 0)} unidades totais
-          {conflictsCount > 0 && (
-            <span className="ml-1 text-amber-600">
-              · {conflictsCount} item(ns) com valores divergentes entre arquivos
-            </span>
-          )}
+      <div className="rounded-md border bg-background/50 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+          <div>
+            <div className="font-medium">Pré-visualização</div>
+            <div className="text-muted-foreground">
+              {filteredRows.length} linha(s) após filtros · {preview.length} item(ns) único(s) ·{" "}
+              {preview.reduce((s, p) => s + p.totalQuantity, 0)} unidades totais
+              {conflictsCount > 0 && (
+                <span className="ml-1 text-amber-600">
+                  · {conflictsCount} item(ns) com valores divergentes entre arquivos
+                </span>
+              )}
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!filteredRows.length || !previewCols.length}
+            onClick={() => setShowRows((v) => !v)}
+          >
+            {showRows ? (
+              <><ChevronDown className="mr-1 h-3.5 w-3.5" />Ocultar dados filtrados</>
+            ) : (
+              <><ChevronRight className="mr-1 h-3.5 w-3.5" />Ver dados filtrados</>
+            )}
+          </Button>
         </div>
+        {showRows && previewCols.length > 0 && (
+          <div className="max-h-[420px] overflow-auto border-t">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card">
+                <TableRow>
+                  {previewCols.map((c) => (
+                    <TableHead key={c} className="whitespace-nowrap text-[11px]">
+                      {c}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRows.slice(0, PREVIEW_LIMIT).map((r, i) => (
+                  <TableRow key={i}>
+                    {previewCols.map((c) => (
+                      <TableCell key={c} className="whitespace-nowrap py-1 text-[11px]">
+                        {r[c] ?? ""}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {filteredRows.length > PREVIEW_LIMIT && (
+              <div className="border-t p-2 text-center text-[11px] text-muted-foreground">
+                Exibindo {PREVIEW_LIMIT} de {filteredRows.length} linhas. Use a consolidação ou exportação para ver tudo.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
