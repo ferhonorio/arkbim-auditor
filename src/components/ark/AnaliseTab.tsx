@@ -100,43 +100,57 @@ export function AnaliseTab() {
     [ruleFiltered, groupBy, concatCols, concatStrategy],
   );
 
-  // Pre-compute bad keys per rule (priority order)
-  const badKeysPerRule = useMemo(
-    () => visualRules.map((r) => computeInconsistentKeys(r, ruleFiltered)),
-    [visualRules, ruleFiltered],
-  );
-
-  // Pre-compute full eval per rule for tooltips ("por quê?")
+  // Pre-compute rule evaluation on the SEARCHED base (not ruleFiltered) so the
+  // toggle "show only matches" doesn't change which keys count as comparable.
   const evalsPerRule = useMemo(
-    () => visualRules.map((r) => evaluateRule(r, ruleFiltered)),
-    [visualRules, ruleFiltered],
+    () => visualRules.map((r) => evaluateRule(r, searched)),
+    [visualRules, searched],
   );
 
-  // Live diagnostics per rule for inline feedback
+  // Pre-compute matching keys per rule from the same base.
+  const badKeysPerRule = useMemo(
+    () =>
+      visualRules.map((rule, idx) => {
+        const evals = evalsPerRule[idx];
+        const wantInc = (rule.applyWhen ?? "inconsistent") === "inconsistent";
+        const out = new Set<string>();
+        for (const [k, ev] of evals) {
+          if (!ev.comparable) continue;
+          if (wantInc ? ev.inconsistent : !ev.inconsistent) out.add(k);
+        }
+        return out;
+      }),
+    [visualRules, evalsPerRule],
+  );
+
+  // Live diagnostics per rule (only comparable keys count).
   const ruleStats = useMemo(
     () =>
-      visualRules.map((r) => {
+      visualRules.map((r, idx) => {
         const keyCols = r.keyColumns ?? [];
         const cmpCols = r.compareColumns ?? [];
         if (!keyCols.length || !cmpCols.length) {
           return { totalKeys: 0, divergent: 0, consistent: 0, matched: 0, avgRows: 0 };
         }
-        const evals = evaluateRule(r, searched);
+        const evals = evalsPerRule[idx];
         let divergent = 0;
         let consistent = 0;
         let matched = 0;
         let totalRows = 0;
+        let comparableKeys = 0;
         const wantInc = (r.applyWhen ?? "inconsistent") === "inconsistent";
         for (const ev of evals.values()) {
+          if (!ev.comparable) continue;
+          comparableKeys++;
           if (ev.inconsistent) divergent++;
           else consistent++;
           if (wantInc ? ev.inconsistent : !ev.inconsistent) matched++;
           totalRows += ev.rowsCount;
         }
-        const avgRows = evals.size ? totalRows / evals.size : 0;
-        return { totalKeys: evals.size, divergent, consistent, matched, avgRows };
+        const avgRows = comparableKeys ? totalRows / comparableKeys : 0;
+        return { totalKeys: comparableKeys, divergent, consistent, matched, avgRows };
       }),
-    [visualRules, searched],
+    [visualRules, evalsPerRule],
   );
 
   const start = page * pageSize;
