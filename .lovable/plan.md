@@ -1,54 +1,37 @@
-## Objetivo
+Plano para deixar a análise visual lógica e enxuta:
 
-Corrigir o descasamento entre a intenção do usuário e o comportamento das regras visuais, sem mudar a matemática (que está correta), tornando a UI auto-explicativa, alertando configurações sem sentido e expondo um diagnóstico ao vivo por regra.
+1. Separar a base da regra visual da base exibida
+- A regra visual será calculada sempre sobre as linhas filtradas por filtros/busca, antes do toggle “Mostrar somente itens das regras visuais”.
+- O toggle só reduzirá a tabela depois que as chaves divergentes já forem identificadas.
+- Isso evita reavaliar a regra em cima de uma lista já filtrada e gerar comportamentos confusos.
 
-## 1. Renomear e re-explicar os campos da regra (`AnaliseTab.tsx`)
+2. Corrigir o agrupamento para refletir os níveis definidos
+- Quando o usuário agrupar por `Type Mark` e depois por `Description`, a tabela será ordenada hierarquicamente por esses campos.
+- Assim, se o `Type Mark 24` tiver duas `Description` diferentes, as duas linhas aparecerão próximas uma da outra:
 
-- Renomear "Parâmetro(s) comum(ns) — chave" para **"Chave (o que identifica o MESMO item)"** com tooltip:
-  *"Linhas que tiverem os mesmos valores nesta(s) coluna(s) serão comparadas entre si. Use aqui o identificador do item (ex.: Type Mark), não o que diferencia (ex.: Nome do arquivo)."*
-- Renomear "Parâmetros comparados" para **"Devem ser iguais (entre as linhas que compartilham a chave)"**.
-- Adicionar exemplo embutido em texto pequeno abaixo do bloco da regra:
-  *"Ex.: Chave = Type Mark; Devem ser iguais = Model, Manufacturer, Description. A regra acende quando o mesmo Type Mark aparece em arquivos diferentes com Model/Manufacturer divergente."*
-- Renomear "Aplicar quando comparação for" → **"Pintar quando"** com opções:
-  - "Houver divergência (qualquer parâmetro difere)" — `inconsistent`
-  - "Tudo for igual" — `consistent`
+```text
+Type Mark | Description A | Quantidade
+24        | ... A         | 1
+24        | ... B         | 1
+```
 
-## 2. Validações e alertas inline
+3. Aplicar regra visual por chave comum, não pela linha agrupada isolada
+- Para uma regra com chave `Type Mark` e comparação `Description`, o sistema irá:
+  - encontrar todas as linhas brutas com o mesmo `Type Mark`;
+  - só comparar se existirem pelo menos 2 linhas com essa chave;
+  - marcar como divergente se houver mais de um valor real em `Description`;
+  - aplicar a cor em todas as linhas agrupadas que pertencem a essa chave.
+- Portanto, uma linha agrupada com `Quantidade = 1` poderá ficar pintada se ela representa uma das variações de um `Type Mark` que existe em outras linhas com outra descrição.
 
-Em `AnaliseTab.tsx`, para cada regra calcular:
-- `keyOnlyOnePerGroup`: se `Nome do arquivo` ∈ `keyColumns` e cada grupo tiver tipicamente 1 linha → mostrar alerta amarelo:
-  *"Atenção: usar 'Nome do arquivo' como chave isola cada arquivo em grupos separados, então linhas de arquivos diferentes nunca serão comparadas. Provavelmente você quis colocar 'Nome do arquivo' como parâmetro comparado, e algo como 'Type Mark' como chave."*
-- `noCompareCols` ou `noKeyCols` → alerta vermelho "Regra incompleta".
+4. Melhorar a leitura da tabela
+- Manter `Quantidade` como quantidade daquele agrupamento exato.
+- Adicionar um indicador enxuto de comparação da regra, por exemplo “Linhas na chave”, para mostrar quantas linhas brutas existem para aquele `Type Mark` dentro da regra.
+- Isso deixará claro quando uma linha com quantidade 1 está sendo comparada com outras linhas da mesma chave.
 
-## 3. Diagnóstico ao vivo por regra
+5. Ajustar diagnósticos das regras
+- Os contadores “Chaves”, “Divergentes”, “Consistentes” e “Aplica em” passarão a ignorar chaves não comparáveis, ou seja, chaves com apenas 1 linha.
+- Assim, um `Type Mark` único na lista inteira nunca será contado como consistente/divergente nem receberá regra visual.
 
-Abaixo de cada regra, mostrar mini-stats (em tempo real, baseado em `evaluateRule`):
-- Total de chaves distintas
-- Quantas têm divergência
-- Quantas estão consistentes
-- Quantas linhas casam com a regra (segundo o `applyWhen` atual)
-
-Isso deixa óbvio quando a regra "não pega nada" porque foi mal configurada.
-
-## 4. Modo de combinação dos compareColumns (opcional, baixo custo)
-
-Adicionar select extra **"Critério"** com:
-- "Qualquer parâmetro divergente conta" (atual — OR para inconsistent)
-- "Apenas se TODOS divergirem" (novo)
-
-Implementação: novo campo `matchMode: "any" | "all"` em `VisualRule`. Em `evaluateRule`, contar quantos compareColumns têm `set.size > 1`; `inconsistent` vira `count >= 1` (any) ou `count === cmpCols.length` (all). Default `any` para preservar comportamento.
-
-## 5. Replicar a mesma renomeação em `DiagnosticoTab.tsx`
-
-Onde a seção "Aplicação das regras visuais" descreve as regras, usar os mesmos rótulos novos para coerência.
-
-## Arquivos afetados
-
-- `src/components/ark/AnaliseTab.tsx` — labels, tooltips, alertas, mini-stats por regra, select de critério.
-- `src/lib/grouping.ts` — adicionar `matchMode` a `VisualRule` e respeitá-lo em `evaluateRule`.
-- `src/components/ark/DiagnosticoTab.tsx` — atualizar labels.
-- `src/lib/store.ts` — nada (campo opcional, sem migração).
-
-## Fora de escopo
-
-Não alteramos `runAudit`, `compareToConsolidated`, nem `filterRowsByVisualRules` — eles continuam corretos, só passam a se beneficiar de regras melhor configuradas.
+Arquivos a alterar:
+- `src/lib/grouping.ts`: tornar a avaliação, contagem e ordenação de agrupamentos mais previsível.
+- `src/components/ark/AnaliseTab.tsx`: usar a base correta para regras, ordenar/mostrar agrupamentos de forma hierárquica e exibir o indicador de linhas comparadas.

@@ -3,7 +3,6 @@ import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as
 import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
-  computeInconsistentKeys,
   evaluateRule,
   filterRowsByVisualRules,
   groupRows,
@@ -100,43 +99,57 @@ export function AnaliseTab() {
     [ruleFiltered, groupBy, concatCols, concatStrategy],
   );
 
-  // Pre-compute bad keys per rule (priority order)
-  const badKeysPerRule = useMemo(
-    () => visualRules.map((r) => computeInconsistentKeys(r, ruleFiltered)),
-    [visualRules, ruleFiltered],
-  );
-
-  // Pre-compute full eval per rule for tooltips ("por quê?")
+  // Pre-compute rule evaluation on the SEARCHED base (not ruleFiltered) so the
+  // toggle "show only matches" doesn't change which keys count as comparable.
   const evalsPerRule = useMemo(
-    () => visualRules.map((r) => evaluateRule(r, ruleFiltered)),
-    [visualRules, ruleFiltered],
+    () => visualRules.map((r) => evaluateRule(r, searched)),
+    [visualRules, searched],
   );
 
-  // Live diagnostics per rule for inline feedback
+  // Pre-compute matching keys per rule from the same base.
+  const badKeysPerRule = useMemo(
+    () =>
+      visualRules.map((rule, idx) => {
+        const evals = evalsPerRule[idx];
+        const wantInc = (rule.applyWhen ?? "inconsistent") === "inconsistent";
+        const out = new Set<string>();
+        for (const [k, ev] of evals) {
+          if (!ev.comparable) continue;
+          if (wantInc ? ev.inconsistent : !ev.inconsistent) out.add(k);
+        }
+        return out;
+      }),
+    [visualRules, evalsPerRule],
+  );
+
+  // Live diagnostics per rule (only comparable keys count).
   const ruleStats = useMemo(
     () =>
-      visualRules.map((r) => {
+      visualRules.map((r, idx) => {
         const keyCols = r.keyColumns ?? [];
         const cmpCols = r.compareColumns ?? [];
         if (!keyCols.length || !cmpCols.length) {
           return { totalKeys: 0, divergent: 0, consistent: 0, matched: 0, avgRows: 0 };
         }
-        const evals = evaluateRule(r, searched);
+        const evals = evalsPerRule[idx];
         let divergent = 0;
         let consistent = 0;
         let matched = 0;
         let totalRows = 0;
+        let comparableKeys = 0;
         const wantInc = (r.applyWhen ?? "inconsistent") === "inconsistent";
         for (const ev of evals.values()) {
+          if (!ev.comparable) continue;
+          comparableKeys++;
           if (ev.inconsistent) divergent++;
           else consistent++;
           if (wantInc ? ev.inconsistent : !ev.inconsistent) matched++;
           totalRows += ev.rowsCount;
         }
-        const avgRows = evals.size ? totalRows / evals.size : 0;
-        return { totalKeys: evals.size, divergent, consistent, matched, avgRows };
+        const avgRows = comparableKeys ? totalRows / comparableKeys : 0;
+        return { totalKeys: comparableKeys, divergent, consistent, matched, avgRows };
       }),
-    [visualRules, searched],
+    [visualRules, evalsPerRule],
   );
 
   const start = page * pageSize;
@@ -587,14 +600,13 @@ export function AnaliseTab() {
               {pageGroups.map((g) => {
                 let bg: string | undefined;
                 let why: string | undefined;
+                let keyRowsCount: number | undefined;
                 for (let idx = 0; idx < visualRules.length; idx++) {
                   if (ruleMatchesGroup(visualRules[idx], g, badKeysPerRule[idx])) {
                     bg = visualRules[idx].color;
-                    // Build "por quê" explanation
                     const rule = visualRules[idx];
                     const evals = evalsPerRule[idx];
                     const keyCols = rule.keyColumns ?? [];
-                    // Find first rawRow whose key is in matching set
                     let matchedKey = "";
                     for (const r of g.rawRows) {
                       const k = keyCols.map((c) => (r[c] ?? "").trim()).join("\u0001");
@@ -602,6 +614,7 @@ export function AnaliseTab() {
                     }
                     const ev = matchedKey ? evals.get(matchedKey) : undefined;
                     if (ev) {
+                      keyRowsCount = ev.rowsCount;
                       const keyDesc = keyCols
                         .map((c) => `${c}="${ev.keyValues[c] ?? ""}"`)
                         .join(", ");
@@ -616,7 +629,7 @@ export function AnaliseTab() {
                             .map(([c, vals]) => `  • ${c}: ${vals.join(" | ")}`)
                             .join("\n")
                         : "";
-                      why = header + body + `\n\nObs.: esta linha tem qtd ${g.quantity}, mas a regra avalia TODAS as linhas brutas que compartilham a chave (não só este agrupamento).`;
+                      why = header + body + `\n\nObs.: esta linha agrupada tem qtd ${g.quantity}; a regra compara TODAS as ${ev.rowsCount} linhas brutas que compartilham a chave.`;
                     }
                     break;
                   }
@@ -649,7 +662,19 @@ export function AnaliseTab() {
                         </div>
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-medium">{g.quantity}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      <div className="flex items-center justify-end gap-2">
+                        {keyRowsCount !== undefined && (
+                          <span
+                            className="rounded-full border bg-background/70 px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"
+                            title={`Linhas brutas que compartilham a chave da regra: ${keyRowsCount}`}
+                          >
+                            chave: {keyRowsCount}
+                          </span>
+                        )}
+                        <span>{g.quantity}</span>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}
