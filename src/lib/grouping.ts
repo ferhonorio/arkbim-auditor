@@ -116,6 +116,7 @@ export function groupRows(
 // compareColumn diverges, the key is "inconsistent" and groups whose rawRows
 // fall under that key get highlighted.
 export type VisualRuleApplyWhen = "inconsistent" | "consistent";
+export type VisualRuleMatchMode = "any" | "all";
 
 export interface VisualRule {
   id: string;
@@ -126,6 +127,9 @@ export interface VisualRule {
   // "inconsistent" (default): pinta quando a comparacao FALHA (valores divergem)
   // "consistent": pinta quando a comparacao PASSA (valores iguais)
   applyWhen?: VisualRuleApplyWhen;
+  // "any" (default): basta UM compareColumn divergir para o grupo ser inconsistente
+  // "all": só é inconsistente se TODOS os compareColumns divergirem
+  matchMode?: VisualRuleMatchMode;
 }
 
 // Returns map of key -> { inconsistent: boolean; files: string[]; rows: Row[] }
