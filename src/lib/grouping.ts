@@ -51,10 +51,13 @@ export interface GroupedRow {
   rawRows: Row[];
 }
 
+export type ConcatStrategy = "all" | "unique" | "first" | "last" | "min" | "max" | "count";
+
 export function groupRows(
   rows: Row[],
   groupBy: string[],
   concatCols: string[] = [],
+  concatStrategy: Record<string, ConcatStrategy> = {},
   idCol = "ID",
 ): GroupedRow[] {
   if (!groupBy.length) return [];
@@ -80,15 +83,29 @@ export function groupRows(
     g.rawRows.push(r);
     if (r[idCol]) g.ids.push(r[idCol]);
   }
-  // Build concat sets
   for (const g of map.values()) {
     for (const c of concatCols) {
-      const set = new Set<string>();
+      const strategy = concatStrategy[c] ?? "unique";
+      const all: string[] = [];
       for (const r of g.rawRows) {
         const v = (r[c] ?? "").trim();
-        if (v) set.add(v);
+        if (v) all.push(v);
       }
-      g.concat[c] = Array.from(set).join(", ");
+      if (strategy === "count") {
+        g.concat[c] = String(all.length);
+      } else if (strategy === "first") {
+        g.concat[c] = all[0] ?? "";
+      } else if (strategy === "last") {
+        g.concat[c] = all[all.length - 1] ?? "";
+      } else if (strategy === "min") {
+        g.concat[c] = all.slice().sort()[0] ?? "";
+      } else if (strategy === "max") {
+        g.concat[c] = all.slice().sort().reverse()[0] ?? "";
+      } else if (strategy === "all") {
+        g.concat[c] = all.join(", ");
+      } else {
+        g.concat[c] = Array.from(new Set(all)).join(", ");
+      }
     }
   }
   return Array.from(map.values());
