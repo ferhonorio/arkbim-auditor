@@ -3,7 +3,7 @@ import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as
 import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
-  evaluateRule,
+  evaluateRuleOnGroups,
   filterRowsByVisualRules,
   groupRows,
   ruleMatchesGroup,
