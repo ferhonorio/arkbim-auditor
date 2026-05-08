@@ -76,6 +76,21 @@ interface ArkState {
   saveConsolidatedSnapshot: (s: ConsolidatedSnapshot) => void;
   clearConsolidatedSnapshot: () => void;
 
+  // Component lists (consolidação multi-pavimento)
+  componentLists: ComponentList[];
+  activeComponentListId: string | null;
+  setActiveComponentList: (id: string | null) => void;
+  createComponentList: (name: string) => string;
+  duplicateComponentList: (id: string) => string | null;
+  renameComponentList: (id: string, name: string) => void;
+  deleteComponentList: (id: string) => void;
+  updateComponentList: (id: string, patch: Partial<ComponentList>) => void;
+  setColumnAlias: (id: string, column: string, alias: string) => void;
+  consolidateIntoList: (id: string, mode: ConsolidationMode) => {
+    added: number; updated: number; unchanged: number; newFiles: string[];
+  } | null;
+  removeListItem: (id: string, key: string) => void;
+
   // Saved presets
   filterPresets: SavedPreset<Filter[]>[];
   rulePresets: SavedPreset<VisualRule[]>[];
