@@ -623,7 +623,7 @@ export function AnaliseTab() {
                       const header = isInc
                         ? `Regra "${rule.name ?? "#" + (idx + 1)}" — chave ${keyDesc}\n${ev.rowsCount} linhas em ${ev.files.length} arquivo(s): ${ev.files.join(", ")}`
                         : `Regra "${rule.name ?? "#" + (idx + 1)}" — chave ${keyDesc}\n${ev.rowsCount} linhas, todos os parâmetros conferem.`;
-                      const diffs = Object.entries(ev.diffByColumn);
+                      const diffs = Object.entries(ev.diffByColumn) as [string, string[]][];
                       const body = diffs.length
                         ? "\nDivergências:\n" +
                           diffs
