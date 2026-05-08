@@ -106,6 +106,33 @@ export function AnaliseTab() {
     [visualRules, ruleFiltered],
   );
 
+  // Live diagnostics per rule for inline feedback
+  const ruleStats = useMemo(
+    () =>
+      visualRules.map((r) => {
+        const keyCols = r.keyColumns ?? [];
+        const cmpCols = r.compareColumns ?? [];
+        if (!keyCols.length || !cmpCols.length) {
+          return { totalKeys: 0, divergent: 0, consistent: 0, matched: 0, avgRows: 0 };
+        }
+        const evals = evaluateRule(r, searched);
+        let divergent = 0;
+        let consistent = 0;
+        let matched = 0;
+        let totalRows = 0;
+        const wantInc = (r.applyWhen ?? "inconsistent") === "inconsistent";
+        for (const ev of evals.values()) {
+          if (ev.inconsistent) divergent++;
+          else consistent++;
+          if (wantInc ? ev.inconsistent : !ev.inconsistent) matched++;
+          totalRows += ev.rowsCount;
+        }
+        const avgRows = evals.size ? totalRows / evals.size : 0;
+        return { totalKeys: evals.size, divergent, consistent, matched, avgRows };
+      }),
+    [visualRules, searched],
+  );
+
   const start = page * pageSize;
   const pageGroups = groups.slice(start, start + pageSize);
   const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
