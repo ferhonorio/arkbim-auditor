@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,7 +9,9 @@ import { ColumnsPanel } from "@/components/ark/ColumnsPanel";
 import { AnaliseTab } from "@/components/ark/AnaliseTab";
 import { AuditoriaTab } from "@/components/ark/AuditoriaTab";
 import { ConsolidadaTab } from "@/components/ark/ConsolidadaTab";
+import { DiagnosticoTab } from "@/components/ark/DiagnosticoTab";
 import { useArk } from "@/lib/store";
+import { installGlobalErrorCapture } from "@/lib/diagnostics";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,6 +30,9 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [collapsed, setCollapsed] = useState(false);
   const dataset = useArk((s) => s.dataset);
+  useEffect(() => {
+    installGlobalErrorCapture();
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -82,6 +87,7 @@ function Index() {
               <TabsTrigger value="analise">Analise e agrupamento</TabsTrigger>
               <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>
               <TabsTrigger value="consolidada">Lista consolidada</TabsTrigger>
+              <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
             </TabsList>
             <TabsContent value="analise" className="mt-4">
               <AnaliseTab />
@@ -91,6 +97,9 @@ function Index() {
             </TabsContent>
             <TabsContent value="consolidada" className="mt-4">
               <ConsolidadaTab />
+            </TabsContent>
+            <TabsContent value="diagnostico" className="mt-4">
+              <DiagnosticoTab />
             </TabsContent>
           </Tabs>
         </div>
