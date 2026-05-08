@@ -61,11 +61,18 @@ interface ArkState {
   pageSize: number;
   setPageSize: (n: number) => void;
 
+  onlyRuleMatches: boolean;
+  setOnlyRuleMatches: (b: boolean) => void;
+
   auditRules: AuditRule[];
   setAuditRules: (r: AuditRule[]) => void;
 
   consolidationConfig: Partial<ConsolidationConfig>;
   setConsolidationConfig: (c: Partial<ConsolidationConfig>) => void;
+
+  consolidatedSnapshot: ConsolidatedSnapshot | null;
+  saveConsolidatedSnapshot: (s: ConsolidatedSnapshot) => void;
+  clearConsolidatedSnapshot: () => void;
 
   // Saved presets
   filterPresets: SavedPreset<Filter[]>[];
