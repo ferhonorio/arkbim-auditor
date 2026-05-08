@@ -160,21 +160,28 @@ export function evaluateRule(
   for (const [k, grp] of groups) {
     const diffByColumn: Record<string, string[]> = {};
     let divergentCount = 0;
-    for (const c of cmpCols) {
-      const set = new Set<string>();
-      for (const r of grp) {
-        const v = (r[c] ?? "").trim();
-        if (v) set.add(v);
-      }
-      if (set.size > 1) {
-        divergentCount++;
-        diffByColumn[c] = Array.from(set);
+    // Só faz sentido comparar quando há mais de uma linha compartilhando a chave.
+    // Se houver apenas 1 linha, não há com o que comparar -> nunca inconsistente.
+    const comparable = grp.length > 1;
+    if (comparable) {
+      for (const c of cmpCols) {
+        const set = new Set<string>();
+        for (const r of grp) {
+          const v = (r[c] ?? "").trim();
+          if (v) set.add(v);
+        }
+        if (set.size > 1) {
+          divergentCount++;
+          diffByColumn[c] = Array.from(set);
+        }
       }
     }
     const inconsistent =
-      matchMode === "all"
-        ? divergentCount === cmpCols.length && divergentCount > 0
-        : divergentCount > 0;
+      !comparable
+        ? false
+        : matchMode === "all"
+          ? divergentCount === cmpCols.length && divergentCount > 0
+          : divergentCount > 0;
     const filesSet = new Set<string>();
     for (const r of grp) {
       const f = (r[fileColumn] ?? "").trim();
