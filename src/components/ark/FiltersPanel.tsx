@@ -111,55 +111,138 @@ export function FiltersPanel() {
             <p className="text-xs text-muted-foreground">Nenhum filtro ativo.</p>
           )}
           {filters.map((f) => (
-            <div key={f.id} className="space-y-2 rounded-md border bg-background p-2">
-              <Select
-                value={f.column}
-                onValueChange={(v) => update(f.id, { column: v })}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Coluna" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cols.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={f.op}
-                onValueChange={(v) => update(f.id, { op: v as FilterOp })}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {OPS.map((o) => (
-                    <SelectItem key={o} value={o}>
-                      {o}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {f.op !== "preenchido" && f.op !== "vazio" && (
-                <Input
-                  className="h-8 text-xs"
-                  placeholder="Valor"
-                  value={f.value}
-                  onChange={(e) => update(f.id, { value: e.target.value })}
-                />
-              )}
-              <button
-                onClick={() => remove(f.id)}
-                className="text-xs text-muted-foreground hover:text-destructive"
-              >
-                Remover
-              </button>
-            </div>
+            <FilterRow
+              key={f.id}
+              filter={f}
+              cols={cols}
+              rows={dataset?.rows ?? []}
+              onUpdate={(patch) => update(f.id, patch)}
+              onRemove={() => remove(f.id)}
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function FilterRow({
+  filter: f,
+  cols,
+  rows,
+  onUpdate,
+  onRemove,
+}: {
+  filter: Filter;
+  cols: string[];
+  rows: Array<Record<string, string>>;
+  onUpdate: (patch: Partial<Filter>) => void;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const distinct = useMemo(() => {
+    if (!f.column) return [] as string[];
+    const set = new Set<string>();
+    for (const r of rows) {
+      const v = (r[f.column] ?? "").trim();
+      if (v) set.add(v);
+      if (set.size > 2000) break;
+    }
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+    );
+  }, [rows, f.column]);
+
+  const showValue = f.op !== "preenchido" && f.op !== "vazio";
+
+  return (
+    <div className="space-y-2 rounded-md border bg-background p-2">
+      <Select value={f.column} onValueChange={(v) => onUpdate({ column: v })}>
+        <SelectTrigger className="h-8 text-xs">
+          <SelectValue placeholder="Coluna" />
+        </SelectTrigger>
+        <SelectContent>
+          {cols.map((c) => (
+            <SelectItem key={c} value={c}>
+              {c}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={f.op} onValueChange={(v) => onUpdate({ op: v as FilterOp })}>
+        <SelectTrigger className="h-8 text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {OPS.map((o) => (
+            <SelectItem key={o} value={o}>
+              {o}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {showValue && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <div className="flex gap-1">
+            <Input
+              className="h-8 flex-1 text-xs"
+              placeholder="Valor"
+              value={f.value}
+              onChange={(e) => onUpdate({ value: e.target.value })}
+            />
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                title="Selecionar valor existente"
+              >
+                <ChevronsUpDown className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+          </div>
+          <PopoverContent className="w-[260px] p-0" align="end">
+            <Command>
+              <CommandInput placeholder="Buscar valor..." className="h-8" />
+              <CommandList>
+                <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
+                  {distinct.length === 0
+                    ? "Sem valores na coluna"
+                    : "Nenhum resultado"}
+                </CommandEmpty>
+                <CommandGroup>
+                  {distinct.map((v) => (
+                    <CommandItem
+                      key={v}
+                      value={v}
+                      onSelect={() => {
+                        onUpdate({ value: v });
+                        setOpen(false);
+                      }}
+                      className="text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-3 w-3",
+                          f.value === v ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <span className="truncate">{v}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      )}
+      <button
+        onClick={onRemove}
+        className="text-xs text-muted-foreground hover:text-destructive"
+      >
+        Remover
+      </button>
     </div>
   );
 }
