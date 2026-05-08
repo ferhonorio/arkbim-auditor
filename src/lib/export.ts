@@ -10,7 +10,7 @@ export function exportXLSX(
   for (const s of sheets) {
     const cols = s.columns ?? (s.rows[0] ? Object.keys(s.rows[0]) : []);
     const data = s.rows.map((r) => {
-      const o: Record<string, string> = {};
+      const o: Record<string, string | number> = {};
       for (const c of cols) o[c] = r[c] ?? "";
       return o;
     });
