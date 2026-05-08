@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,7 +9,9 @@ import { ColumnsPanel } from "@/components/ark/ColumnsPanel";
 import { AnaliseTab } from "@/components/ark/AnaliseTab";
 import { AuditoriaTab } from "@/components/ark/AuditoriaTab";
 import { ConsolidadaTab } from "@/components/ark/ConsolidadaTab";
+import { DiagnosticoTab } from "@/components/ark/DiagnosticoTab";
 import { useArk } from "@/lib/store";
+import { installGlobalErrorCapture } from "@/lib/diagnostics";
 
 export const Route = createFileRoute("/")({
   head: () => ({
