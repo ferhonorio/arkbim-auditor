@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { Plus, X, Copy, Trash2 } from "lucide-react";
-import { useArk } from "@/lib/store";
+import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2 } from "lucide-react";
+import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
+  computeInconsistentKeys,
   groupRows,
-  ruleMatches,
+  ruleMatchesGroup,
   type VisualRule,
 } from "@/lib/grouping";
 import {
@@ -27,13 +28,16 @@ import {
 import { exportXLSX } from "@/lib/export";
 import { toast } from "sonner";
 
-const RULE_COLORS = [
-  "#fee2e2",
-  "#fef3c7",
-  "#dcfce7",
-  "#dbeafe",
-  "#f3e8ff",
-  "#ffedd5",
+const RULE_COLORS = ["#fee2e2", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#ffedd5"];
+
+const STRATEGIES: { value: ConcatStrategy; label: string }[] = [
+  { value: "unique", label: "Valores únicos" },
+  { value: "all", label: "Todos os valores" },
+  { value: "first", label: "Primeiro" },
+  { value: "last", label: "Último" },
+  { value: "min", label: "Menor (a→z)" },
+  { value: "max", label: "Maior (z→a)" },
+  { value: "count", label: "Contagem" },
 ];
 
 export function AnaliseTab() {
@@ -44,6 +48,8 @@ export function AnaliseTab() {
   const setGroupBy = useArk((s) => s.setGroupBy);
   const concatCols = useArk((s) => s.concatCols);
   const setConcatCols = useArk((s) => s.setConcatCols);
+  const concatStrategy = useArk((s) => s.concatStrategy);
+  const setConcatStrategy = useArk((s) => s.setConcatStrategy);
   const visualRules = useArk((s) => s.visualRules);
   const setVisualRules = useArk((s) => s.setVisualRules);
   const focusParam = useArk((s) => s.focusParam);
@@ -52,6 +58,16 @@ export function AnaliseTab() {
   const setSearchValue = useArk((s) => s.setSearchValue);
   const pageSize = useArk((s) => s.pageSize);
   const setPageSize = useArk((s) => s.setPageSize);
+
+  const rulePresets = useArk((s) => s.rulePresets);
+  const saveRulePreset = useArk((s) => s.saveRulePreset);
+  const loadRulePreset = useArk((s) => s.loadRulePreset);
+  const deleteRulePreset = useArk((s) => s.deleteRulePreset);
+
+  const groupingPresets = useArk((s) => s.groupingPresets);
+  const saveGroupingPreset = useArk((s) => s.saveGroupingPreset);
+  const loadGroupingPreset = useArk((s) => s.loadGroupingPreset);
+  const deleteGroupingPreset = useArk((s) => s.deleteGroupingPreset);
 
   const [page, setPage] = useState(0);
 
@@ -71,8 +87,14 @@ export function AnaliseTab() {
   }, [filtered, searchValue, focusParam, cols]);
 
   const groups = useMemo(
-    () => groupRows(searched, groupBy, concatCols),
-    [searched, groupBy, concatCols],
+    () => groupRows(searched, groupBy, concatCols, concatStrategy),
+    [searched, groupBy, concatCols, concatStrategy],
+  );
+
+  // Pre-compute bad keys per rule (priority order)
+  const badKeysPerRule = useMemo(
+    () => visualRules.map((r) => computeInconsistentKeys(r, searched)),
+    [visualRules, searched],
   );
 
   const start = page * pageSize;
@@ -99,16 +121,32 @@ export function AnaliseTab() {
     const next = visibleCols.find((c) => !concatCols.includes(c) && !groupBy.includes(c));
     if (next) setConcatCols([...concatCols, next]);
   };
-  const rmConcat = (c: string) => setConcatCols(concatCols.filter((x) => x !== c));
+  const rmConcat = (c: string) => {
+    setConcatCols(concatCols.filter((x) => x !== c));
+    const ns = { ...concatStrategy };
+    delete ns[c];
+    setConcatStrategy(ns);
+  };
+  const updateConcatCol = (oldC: string, newC: string) => {
+    setConcatCols(concatCols.map((x) => (x === oldC ? newC : x)));
+    if (concatStrategy[oldC]) {
+      const ns = { ...concatStrategy };
+      ns[newC] = ns[oldC];
+      delete ns[oldC];
+      setConcatStrategy(ns);
+    }
+  };
+  const setStrategy = (c: string, s: ConcatStrategy) =>
+    setConcatStrategy({ ...concatStrategy, [c]: s });
 
   const addRule = () => {
-    const col = visibleCols[0];
-    if (!col) return;
     setVisualRules([
       ...visualRules,
       {
         id: crypto.randomUUID(),
-        column: col,
+        name: `Regra ${visualRules.length + 1}`,
+        keyColumns: cols.includes("Nome do arquivo") ? [] : [],
+        compareColumns: [],
         color: RULE_COLORS[visualRules.length % RULE_COLORS.length],
       },
     ]);
@@ -116,6 +154,13 @@ export function AnaliseTab() {
   const updRule = (id: string, patch: Partial<VisualRule>) =>
     setVisualRules(visualRules.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const rmRule = (id: string) => setVisualRules(visualRules.filter((r) => r.id !== id));
+  const moveRule = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= visualRules.length) return;
+    const arr = [...visualRules];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setVisualRules(arr);
+  };
 
   const exportFiltered = () => {
     if (!filtered.length) return toast.error("Nada para exportar");
@@ -124,22 +169,36 @@ export function AnaliseTab() {
     ]);
   };
 
+  const askAndSave = (label: string, fn: (n: string) => void) => {
+    const name = window.prompt(`Nome do preset de ${label}:`);
+    if (name?.trim()) {
+      fn(name.trim());
+      toast.success("Preset salvo");
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Linhas totais" value={rows.length} />
-        <Kpi label="Apos filtros" value={filtered.length} />
-        <Kpi label="Colunas visiveis" value={visibleCols.length} />
+        <Kpi label="Após filtros" value={filtered.length} />
+        <Kpi label="Colunas visíveis" value={visibleCols.length} />
         <Kpi label="Regras ativas" value={visualRules.length} />
       </div>
 
       {/* Visual rules */}
       <Section
-        title="Regras visuais de comparacao"
-        subtitle="Destacam grupos com mais de um valor distinto na coluna escolhida."
+        title="Regras visuais de comparação"
+        subtitle="A primeira regra tem prioridade. Cada regra define a chave (parâmetro comum) e os parâmetros que devem ser iguais para essa chave."
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <PresetMenu
+              label="Regras"
+              presets={rulePresets}
+              onSave={() => askAndSave("regras", saveRulePreset)}
+              onLoad={loadRulePreset}
+              onDelete={deleteRulePreset}
+            />
             <Button size="sm" variant="outline" onClick={addRule}>
               <Plus className="mr-1 h-3.5 w-3.5" /> Regra
             </Button>
@@ -149,34 +208,72 @@ export function AnaliseTab() {
         {visualRules.length === 0 && (
           <p className="text-xs text-muted-foreground">Nenhuma regra ativa.</p>
         )}
-        <div className="grid gap-2 md:grid-cols-2">
-          {visualRules.map((r) => (
+        <div className="space-y-2">
+          {visualRules.map((r, i) => (
             <div
               key={r.id}
-              className="flex items-center gap-2 rounded-md border p-2"
+              className="rounded-md border p-3"
               style={{ background: r.color }}
             >
-              <Select value={r.column} onValueChange={(v) => updRule(r.id, { column: v })}>
-                <SelectTrigger className="h-8 flex-1 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {cols.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <input
-                type="color"
-                value={r.color.startsWith("#") ? r.color : "#fee2e2"}
-                onChange={(e) => updRule(r.id, { color: e.target.value })}
-                className="h-7 w-7 cursor-pointer rounded border"
-              />
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => rmRule(r.id)}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-background/70 px-2 py-0.5 text-[10px] font-semibold">
+                  #{i + 1}
+                </span>
+                <Input
+                  value={r.name ?? ""}
+                  placeholder="Nome da regra"
+                  onChange={(e) => updRule(r.id, { name: e.target.value })}
+                  className="h-7 max-w-xs bg-background/70 text-xs"
+                />
+                <input
+                  type="color"
+                  value={r.color.startsWith("#") ? r.color : "#fee2e2"}
+                  onChange={(e) => updRule(r.id, { color: e.target.value })}
+                  className="h-7 w-7 cursor-pointer rounded border"
+                />
+                <div className="ml-auto flex gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => moveRule(i, -1)}
+                    disabled={i === 0}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => moveRule(i, 1)}
+                    disabled={i === visualRules.length - 1}
+                  >
+                    <ArrowDown className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7"
+                    onClick={() => rmRule(r.id)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <ColumnMultiPicker
+                  label="Parâmetro(s) comum(ns) — chave"
+                  cols={cols}
+                  value={r.keyColumns}
+                  onChange={(v) => updRule(r.id, { keyColumns: v })}
+                />
+                <ColumnMultiPicker
+                  label="Parâmetros comparados (devem ser iguais)"
+                  cols={cols}
+                  value={r.compareColumns}
+                  onChange={(v) => updRule(r.id, { compareColumns: v })}
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -185,17 +282,13 @@ export function AnaliseTab() {
       {/* Search + focus */}
       <div className="grid gap-3 rounded-lg border bg-card p-3 md:grid-cols-[1fr_2fr_auto]">
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">Focar parametro</label>
+          <label className="mb-1 block text-xs text-muted-foreground">Focar parâmetro</label>
           <Select value={focusParam || "_all"} onValueChange={(v) => setFocusParam(v === "_all" ? "" : v)}>
-            <SelectTrigger className="h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">Todos os parametros</SelectItem>
+              <SelectItem value="_all">Todos os parâmetros</SelectItem>
               {cols.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
+                <SelectItem key={c} value={c}>{c}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -203,28 +296,18 @@ export function AnaliseTab() {
         <div>
           <label className="mb-1 block text-xs text-muted-foreground">Buscar valor</label>
           <Input
-            placeholder="Filtrar linhas pelo parametro escolhido"
+            placeholder="Filtrar linhas pelo parâmetro escolhido"
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">Linhas por pagina</label>
-          <Select
-            value={String(pageSize)}
-            onValueChange={(v) => {
-              setPageSize(Number(v));
-              setPage(0);
-            }}
-          >
-            <SelectTrigger className="h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
+          <label className="mb-1 block text-xs text-muted-foreground">Linhas por página</label>
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
+            <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
               {[25, 50, 100, 250, 500].map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
+                <SelectItem key={n} value={String(n)}>{n}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -234,11 +317,18 @@ export function AnaliseTab() {
       {/* Grouping */}
       <Section
         title="Agrupamento"
-        subtitle={`${groups.length.toLocaleString("pt-BR")} grupos encontrados em ${searched.length.toLocaleString("pt-BR")} linhas filtradas.`}
+        subtitle={`${groups.length.toLocaleString("pt-BR")} grupos em ${searched.length.toLocaleString("pt-BR")} linhas filtradas.`}
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <PresetMenu
+              label="Agrupamento"
+              presets={groupingPresets}
+              onSave={() => askAndSave("agrupamento", saveGroupingPreset)}
+              onLoad={loadGroupingPreset}
+              onDelete={deleteGroupingPreset}
+            />
             <Button size="sm" variant="outline" onClick={() => setGroupBy([])}>
-              Limpar agrupamento
+              Limpar
             </Button>
             <Button size="sm" variant="outline" onClick={exportFiltered}>
               Exportar filtrado
@@ -254,14 +344,10 @@ export function AnaliseTab() {
                   {i === 0 ? "Agrupar por" : "Depois por"}
                 </label>
                 <Select value={g} onValueChange={(v) => updGroup(i, v)}>
-                  <SelectTrigger className="h-9 w-[220px] text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="h-9 w-[220px] text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {cols.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -272,7 +358,7 @@ export function AnaliseTab() {
             </div>
           ))}
           <Button size="sm" variant="outline" onClick={addGroup}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> Nivel
+            <Plus className="mr-1 h-3.5 w-3.5" /> Nível
           </Button>
         </div>
 
@@ -283,23 +369,45 @@ export function AnaliseTab() {
               <Plus className="mr-1 h-3.5 w-3.5" /> Coluna
             </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
+          {!concatCols.length && (
+            <span className="text-xs text-muted-foreground">Sem colunas concatenadas.</span>
+          )}
+          <div className="space-y-2">
             {concatCols.map((c) => (
-              <span
+              <div
                 key={c}
-                className="inline-flex items-center gap-1 rounded-full border bg-secondary px-3 py-1 text-xs"
+                className="flex flex-wrap items-end gap-2 rounded-md border bg-background p-2"
               >
-                {c}
-                <button onClick={() => rmConcat(c)}>
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
+                <div>
+                  <label className="mb-1 block text-[10px] text-muted-foreground">Coluna</label>
+                  <Select value={c} onValueChange={(v) => updateConcatCol(c, v)}>
+                    <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {cols.map((x) => (
+                        <SelectItem key={x} value={x}>{x}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] text-muted-foreground">Dado a concatenar</label>
+                  <Select
+                    value={concatStrategy[c] ?? "unique"}
+                    onValueChange={(v) => setStrategy(c, v as ConcatStrategy)}
+                  >
+                    <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STRATEGIES.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => rmConcat(c)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ))}
-            {!concatCols.length && (
-              <span className="text-xs text-muted-foreground">
-                Sem colunas concatenadas.
-              </span>
-            )}
           </div>
         </div>
 
@@ -319,9 +427,15 @@ export function AnaliseTab() {
             </TableHeader>
             <TableBody>
               {pageGroups.map((g) => {
-                const matched = visualRules.find((r) => ruleMatches(r, g));
+                let bg: string | undefined;
+                for (let idx = 0; idx < visualRules.length; idx++) {
+                  if (ruleMatchesGroup(visualRules[idx], g, badKeysPerRule[idx])) {
+                    bg = visualRules[idx].color;
+                    break;
+                  }
+                }
                 return (
-                  <TableRow key={g.key} style={matched ? { background: matched.color } : undefined}>
+                  <TableRow key={g.key} style={bg ? { background: bg } : undefined}>
                     {groupVisible.map((c) => (
                       <TableCell key={c}>{g.values[c]}</TableCell>
                     ))}
@@ -365,24 +479,17 @@ export function AnaliseTab() {
 
         {groups.length > pageSize && (
           <div className="mt-3 flex items-center justify-end gap-2 text-xs">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={page === 0}
-              onClick={() => setPage(page - 1)}
-            >
+            <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
               Anterior
             </Button>
-            <span>
-              Pagina {page + 1} de {totalPages}
-            </span>
+            <span>Página {page + 1} de {totalPages}</span>
             <Button
               size="sm"
               variant="outline"
               disabled={page + 1 >= totalPages}
               onClick={() => setPage(page + 1)}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         )}
@@ -421,6 +528,107 @@ function Section({
         {action}
       </div>
       {children}
+    </div>
+  );
+}
+
+function ColumnMultiPicker({
+  label,
+  cols,
+  value,
+  onChange,
+}: {
+  label: string;
+  cols: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const remaining = cols.filter((c) => !value.includes(c));
+  return (
+    <div className="rounded bg-background/70 p-2">
+      <label className="mb-1 block text-[10px] font-medium uppercase text-muted-foreground">
+        {label}
+      </label>
+      <div className="mb-2 flex flex-wrap gap-1">
+        {value.length === 0 && (
+          <span className="text-[11px] text-muted-foreground">Nenhuma coluna</span>
+        )}
+        {value.map((c) => (
+          <span
+            key={c}
+            className="inline-flex items-center gap-1 rounded-full border bg-secondary px-2 py-0.5 text-[11px]"
+          >
+            {c}
+            <button onClick={() => onChange(value.filter((x) => x !== c))}>
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <Select value="" onValueChange={(v) => v && onChange([...value, v])}>
+        <SelectTrigger className="h-7 text-xs">
+          <SelectValue placeholder="Adicionar coluna" />
+        </SelectTrigger>
+        <SelectContent>
+          {remaining.map((c) => (
+            <SelectItem key={c} value={c}>{c}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+interface PresetItem { id: string; name: string }
+function PresetMenu({
+  label,
+  presets,
+  onSave,
+  onLoad,
+  onDelete,
+}: {
+  label: string;
+  presets: PresetItem[];
+  onSave: () => void;
+  onLoad: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Button size="sm" variant="outline" onClick={onSave}>
+        <Save className="mr-1 h-3.5 w-3.5" /> Salvar {label.toLowerCase()}
+      </Button>
+      {presets.length > 0 && (
+        <Select
+          value=""
+          onValueChange={(v) => {
+            if (v.startsWith("del:")) onDelete(v.slice(4));
+            else onLoad(v);
+          }}
+        >
+          <SelectTrigger className="h-9 w-[180px] text-xs">
+            <SelectValue placeholder={`Carregar ${label.toLowerCase()}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {presets.map((p) => (
+              <div key={p.id} className="flex items-center">
+                <SelectItem value={p.id} className="flex-1">{p.name}</SelectItem>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDelete(p.id);
+                  }}
+                  className="px-2 text-muted-foreground hover:text-destructive"
+                  title="Excluir"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }

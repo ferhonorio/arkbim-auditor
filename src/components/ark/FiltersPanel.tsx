@@ -1,4 +1,4 @@
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Save, Trash2 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import {
   Select,
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { Filter, FilterOp } from "@/lib/grouping";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const OPS: FilterOp[] = [
   "preenchido",
@@ -25,6 +26,10 @@ export function FiltersPanel() {
   const dataset = useArk((s) => s.dataset);
   const filters = useArk((s) => s.filters);
   const setFilters = useArk((s) => s.setFilters);
+  const presets = useArk((s) => s.filterPresets);
+  const savePreset = useArk((s) => s.saveFilterPreset);
+  const loadPreset = useArk((s) => s.loadFilterPreset);
+  const deletePreset = useArk((s) => s.deleteFilterPreset);
   const [open, setOpen] = useState(true);
 
   const cols = dataset?.columns ?? [];
@@ -38,6 +43,14 @@ export function FiltersPanel() {
   const remove = (id: string) => setFilters(filters.filter((f) => f.id !== id));
   const update = (id: string, patch: Partial<Filter>) =>
     setFilters(filters.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+
+  const handleSave = () => {
+    const name = window.prompt("Nome do preset de filtros:");
+    if (name?.trim()) {
+      savePreset(name.trim());
+      toast.success("Filtro salvo");
+    }
+  };
 
   return (
     <div className="rounded-lg border bg-card p-3">
@@ -59,6 +72,31 @@ export function FiltersPanel() {
       </div>
       {open && (
         <div className="mt-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-1 rounded-md border bg-background/50 p-2">
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleSave}>
+              <Save className="mr-1 h-3 w-3" /> Salvar
+            </Button>
+            {presets.length > 0 && (
+              <Select value="" onValueChange={(v) => loadPreset(v)}>
+                <SelectTrigger className="h-7 flex-1 text-xs">
+                  <SelectValue placeholder="Carregar preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  {presets.map((p) => (
+                    <div key={p.id} className="flex items-center">
+                      <SelectItem value={p.id} className="flex-1">{p.name}</SelectItem>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); deletePreset(p.id); }}
+                        className="px-2 text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
           {filters.length === 0 && (
             <p className="text-xs text-muted-foreground">Nenhum filtro ativo.</p>
           )}

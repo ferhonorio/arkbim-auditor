@@ -51,10 +51,13 @@ export interface GroupedRow {
   rawRows: Row[];
 }
 
+export type ConcatStrategy = "all" | "unique" | "first" | "last" | "min" | "max" | "count";
+
 export function groupRows(
   rows: Row[],
   groupBy: string[],
   concatCols: string[] = [],
+  concatStrategy: Record<string, ConcatStrategy> = {},
   idCol = "ID",
 ): GroupedRow[] {
   if (!groupBy.length) return [];
@@ -80,36 +83,99 @@ export function groupRows(
     g.rawRows.push(r);
     if (r[idCol]) g.ids.push(r[idCol]);
   }
-  // Build concat sets
   for (const g of map.values()) {
     for (const c of concatCols) {
-      const set = new Set<string>();
+      const strategy = concatStrategy[c] ?? "unique";
+      const all: string[] = [];
       for (const r of g.rawRows) {
         const v = (r[c] ?? "").trim();
-        if (v) set.add(v);
+        if (v) all.push(v);
       }
-      g.concat[c] = Array.from(set).join(", ");
+      if (strategy === "count") {
+        g.concat[c] = String(all.length);
+      } else if (strategy === "first") {
+        g.concat[c] = all[0] ?? "";
+      } else if (strategy === "last") {
+        g.concat[c] = all[all.length - 1] ?? "";
+      } else if (strategy === "min") {
+        g.concat[c] = all.slice().sort()[0] ?? "";
+      } else if (strategy === "max") {
+        g.concat[c] = all.slice().sort().reverse()[0] ?? "";
+      } else if (strategy === "all") {
+        g.concat[c] = all.join(", ");
+      } else {
+        g.concat[c] = Array.from(new Set(all)).join(", ");
+      }
     }
   }
   return Array.from(map.values());
 }
 
-// Visual rule: highlights groups where, after grouping, a given attribute has
-// more than one distinct value across the rawRows (inconsistency).
+// Visual rule: for a given common-key (keyColumns), the compareColumns must
+// have a single distinct value across all rows sharing that key. If any
+// compareColumn diverges, the key is "inconsistent" and groups whose rawRows
+// fall under that key get highlighted.
 export interface VisualRule {
   id: string;
-  column: string;
-  color: string; // tailwind bg utility or hex
-  label?: string;
+  name?: string;
+  keyColumns: string[]; // parametro(s) comum(ns) usados como chave
+  compareColumns: string[]; // parametros que devem ser iguais para a mesma chave
+  color: string;
 }
 
-export function ruleMatches(rule: VisualRule, g: GroupedRow): boolean {
-  const set = new Set<string>();
-  for (const r of g.rawRows) {
-    const v = (r[rule.column] ?? "").trim();
-    if (v) set.add(v);
+// Legacy shape support
+interface LegacyVisualRule { id: string; column?: string; color: string; name?: string }
+
+export function normalizeRule(r: VisualRule | LegacyVisualRule): VisualRule {
+  const anyR = r as VisualRule & LegacyVisualRule;
+  if (!anyR.keyColumns || !anyR.compareColumns) {
+    return {
+      id: anyR.id,
+      name: anyR.name,
+      color: anyR.color,
+      keyColumns: [],
+      compareColumns: anyR.column ? [anyR.column] : [],
+    };
   }
-  return set.size > 1;
+  return anyR;
+}
+
+export function computeInconsistentKeys(rule: VisualRule, rows: Row[]): Set<string> {
+  const bad = new Set<string>();
+  if (!rule.keyColumns.length || !rule.compareColumns.length) return bad;
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const k = buildKey(rule.keyColumns, r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  }
+  for (const [k, grp] of groups) {
+    for (const c of rule.compareColumns) {
+      const set = new Set<string>();
+      for (const r of grp) {
+        const v = (r[c] ?? "").trim().toLowerCase();
+        if (v) set.add(v);
+      }
+      if (set.size > 1) {
+        bad.add(k);
+        break;
+      }
+    }
+  }
+  return bad;
+}
+
+export function ruleMatchesGroup(
+  rule: VisualRule,
+  g: GroupedRow,
+  badKeys: Set<string>,
+): boolean {
+  if (!rule.keyColumns.length || !rule.compareColumns.length) return false;
+  for (const r of g.rawRows) {
+    const k = buildKey(rule.keyColumns, r);
+    if (badKeys.has(k)) return true;
+  }
+  return false;
 }
 
 // === Consolidated list ===
