@@ -31,7 +31,12 @@ export function DiagnosticoTab() {
   const setVisualRules = useArk((s) => s.setVisualRules);
 
   const [logs, setLogs] = useState<DiagLog[]>(getLogs());
-  useEffect(() => subscribeLogs(() => setLogs(getLogs())), []);
+  useEffect(() => {
+    const unsub = subscribeLogs(() => setLogs(getLogs()));
+    return () => {
+      unsub();
+    };
+  }, []);
 
   const ruleStatus = visualRules.map((r) => {
     const hasNew = Array.isArray(r.keyColumns) && Array.isArray(r.compareColumns);
