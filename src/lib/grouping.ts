@@ -116,6 +116,7 @@ export function groupRows(
 // compareColumn diverges, the key is "inconsistent" and groups whose rawRows
 // fall under that key get highlighted.
 export type VisualRuleApplyWhen = "inconsistent" | "consistent";
+export type VisualRuleMatchMode = "any" | "all";
 
 export interface VisualRule {
   id: string;
@@ -126,6 +127,9 @@ export interface VisualRule {
   // "inconsistent" (default): pinta quando a comparacao FALHA (valores divergem)
   // "consistent": pinta quando a comparacao PASSA (valores iguais)
   applyWhen?: VisualRuleApplyWhen;
+  // "any" (default): basta UM compareColumn divergir para o grupo ser inconsistente
+  // "all": só é inconsistente se TODOS os compareColumns divergirem
+  matchMode?: VisualRuleMatchMode;
 }
 
 // Returns map of key -> { inconsistent: boolean; files: string[]; rows: Row[] }
@@ -152,9 +156,10 @@ export function evaluateRule(
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(r);
   }
+  const matchMode: VisualRuleMatchMode = rule.matchMode ?? "any";
   for (const [k, grp] of groups) {
     const diffByColumn: Record<string, string[]> = {};
-    let inconsistent = false;
+    let divergentCount = 0;
     for (const c of cmpCols) {
       const set = new Set<string>();
       for (const r of grp) {
@@ -162,10 +167,14 @@ export function evaluateRule(
         if (v) set.add(v);
       }
       if (set.size > 1) {
-        inconsistent = true;
+        divergentCount++;
         diffByColumn[c] = Array.from(set);
       }
     }
+    const inconsistent =
+      matchMode === "all"
+        ? divergentCount === cmpCols.length && divergentCount > 0
+        : divergentCount > 0;
     const filesSet = new Set<string>();
     for (const r of grp) {
       const f = (r[fileColumn] ?? "").trim();

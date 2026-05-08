@@ -1,38 +1,54 @@
-## Mudanças solicitadas
+## Objetivo
 
-### 1. Remover painel "Colunas" (visibilidade)
-- Remover `<ColumnsPanel />` de `src/routes/index.tsx` e excluir o arquivo `src/components/ark/ColumnsPanel.tsx`.
-- Manter `hiddenColumns` no store por compatibilidade (não-quebrante), mas todas as views passam a usar `cols` direto (sem filtro de hidden) — atualizar `AnaliseTab` para definir `visibleCols = cols`.
+Corrigir o descasamento entre a intenção do usuário e o comportamento das regras visuais, sem mudar a matemática (que está correta), tornando a UI auto-explicativa, alertando configurações sem sentido e expondo um diagnóstico ao vivo por regra.
 
-### 2. Filtro liga/desliga "Apenas linhas das regras visuais"
-- Adicionar no `AnaliseTab`, ao lado do cabeçalho do bloco "Agrupamento", um `Switch` "Mostrar apenas itens das regras ativas".
-- Estado local + persistido (`onlyRuleMatches: boolean` no store).
-- Quando ligado: filtrar `searched` antes de agrupar — manter apenas linhas cuja chave (segundo qualquer regra ativa, respeitando `applyWhen`) esteja nos `matchingKeys` daquela regra. Implementação: iterar regras → para cada linha, computar `buildKey(rule.keyColumns, row)` e checar se está em `badKeysPerRule[i]`. Se nenhuma regra ativa → manter tudo (com aviso).
-- Mostrar contador "X linhas correspondem às regras".
+## 1. Renomear e re-explicar os campos da regra (`AnaliseTab.tsx`)
 
-### 3. Reordenar abas + Lista Consolidada como base de verdade
-- Reordenar `TabsList` em `src/routes/index.tsx`: **Análise → Lista Consolidada → Auditoria BIM → Diagnóstico**.
-- Tornar a Lista Consolidada **persistente**: introduzir no store `consolidatedSnapshot: { reference: ReferenceItem[]; cfg: ConsolidationConfig; savedAt: number } | null`.
-  - Em `ConsolidadaTab`, adicionar botões **"Salvar como lista oficial"** (congela o `result.reference` atual) e **"Limpar lista oficial"**.
-  - Mostrar badge "Lista oficial salva em DD/MM/YYYY HH:mm" quando existir.
-- **Auditoria BIM**: nova seção "Conformidade com a Lista Consolidada".
-  - Para cada linha filtrada, calcular a chave usando `consolidatedSnapshot.cfg.keyColumns`.
-  - Reportar três grupos: `Faltando` (chaves da lista oficial sem ocorrência), `Extra` (chaves nos arquivos que não existem na lista), `Divergente` (parâmetros validados diferem do canônico salvo).
-  - Tabela "Inconsistências por arquivo vs Lista Consolidada" com colunas: Arquivo, Status, Chave, Coluna, Esperado, Encontrado.
-  - Manter as regras de auditoria atuais como seção secundária.
-- **Diagnóstico**: nova seção "Conformidade com Lista Consolidada" com resumo (total itens oficiais, divergentes, faltando, extra) e link mental para os arquivos afetados. Mostrar também "Lista oficial: salva/não salva" e versão.
+- Renomear "Parâmetro(s) comum(ns) — chave" para **"Chave (o que identifica o MESMO item)"** com tooltip:
+  *"Linhas que tiverem os mesmos valores nesta(s) coluna(s) serão comparadas entre si. Use aqui o identificador do item (ex.: Type Mark), não o que diferencia (ex.: Nome do arquivo)."*
+- Renomear "Parâmetros comparados" para **"Devem ser iguais (entre as linhas que compartilham a chave)"**.
+- Adicionar exemplo embutido em texto pequeno abaixo do bloco da regra:
+  *"Ex.: Chave = Type Mark; Devem ser iguais = Model, Manufacturer, Description. A regra acende quando o mesmo Type Mark aparece em arquivos diferentes com Model/Manufacturer divergente."*
+- Renomear "Aplicar quando comparação for" → **"Pintar quando"** com opções:
+  - "Houver divergência (qualquer parâmetro difere)" — `inconsistent`
+  - "Tudo for igual" — `consistent`
 
-### Arquivos alterados
-- `src/routes/index.tsx` — remover `ColumnsPanel`, reordenar tabs.
-- `src/components/ark/ColumnsPanel.tsx` — excluir.
-- `src/lib/store.ts` — adicionar `onlyRuleMatches` + setter; `consolidatedSnapshot` + `saveConsolidatedSnapshot`/`clearConsolidatedSnapshot`; persistir ambos.
-- `src/lib/grouping.ts` — adicionar helper `filterRowsByVisualRules(rows, rules)` e `compareToConsolidated(rows, snapshot)` retornando `{ faltando, extra, divergente }` por arquivo.
-- `src/components/ark/AnaliseTab.tsx` — switch + filtragem; remover uso de `hiddenColumns`.
-- `src/components/ark/ConsolidadaTab.tsx` — botões salvar/limpar snapshot, badge.
-- `src/components/ark/AuditoriaTab.tsx` — nova seção comparativa.
-- `src/components/ark/DiagnosticoTab.tsx` — nova seção do snapshot.
+## 2. Validações e alertas inline
 
-### Detalhes técnicos
-- A comparação contra Lista Consolidada usa o `cfg` salvo com o snapshot (não o atual em edição), para que a lista oficial seja imutável até o usuário salvar de novo.
-- "Apenas linhas das regras ativas" não altera filtros/agrupamento salvos — é uma view-time toggle.
-- Persistência via `zustand/persist` já configurada; basta incluir os novos campos no `partialize`.
+Em `AnaliseTab.tsx`, para cada regra calcular:
+- `keyOnlyOnePerGroup`: se `Nome do arquivo` ∈ `keyColumns` e cada grupo tiver tipicamente 1 linha → mostrar alerta amarelo:
+  *"Atenção: usar 'Nome do arquivo' como chave isola cada arquivo em grupos separados, então linhas de arquivos diferentes nunca serão comparadas. Provavelmente você quis colocar 'Nome do arquivo' como parâmetro comparado, e algo como 'Type Mark' como chave."*
+- `noCompareCols` ou `noKeyCols` → alerta vermelho "Regra incompleta".
+
+## 3. Diagnóstico ao vivo por regra
+
+Abaixo de cada regra, mostrar mini-stats (em tempo real, baseado em `evaluateRule`):
+- Total de chaves distintas
+- Quantas têm divergência
+- Quantas estão consistentes
+- Quantas linhas casam com a regra (segundo o `applyWhen` atual)
+
+Isso deixa óbvio quando a regra "não pega nada" porque foi mal configurada.
+
+## 4. Modo de combinação dos compareColumns (opcional, baixo custo)
+
+Adicionar select extra **"Critério"** com:
+- "Qualquer parâmetro divergente conta" (atual — OR para inconsistent)
+- "Apenas se TODOS divergirem" (novo)
+
+Implementação: novo campo `matchMode: "any" | "all"` em `VisualRule`. Em `evaluateRule`, contar quantos compareColumns têm `set.size > 1`; `inconsistent` vira `count >= 1` (any) ou `count === cmpCols.length` (all). Default `any` para preservar comportamento.
+
+## 5. Replicar a mesma renomeação em `DiagnosticoTab.tsx`
+
+Onde a seção "Aplicação das regras visuais" descreve as regras, usar os mesmos rótulos novos para coerência.
+
+## Arquivos afetados
+
+- `src/components/ark/AnaliseTab.tsx` — labels, tooltips, alertas, mini-stats por regra, select de critério.
+- `src/lib/grouping.ts` — adicionar `matchMode` a `VisualRule` e respeitá-lo em `evaluateRule`.
+- `src/components/ark/DiagnosticoTab.tsx` — atualizar labels.
+- `src/lib/store.ts` — nada (campo opcional, sem migração).
+
+## Fora de escopo
+
+Não alteramos `runAudit`, `compareToConsolidated`, nem `filterRowsByVisualRules` — eles continuam corretos, só passam a se beneficiar de regras melhor configuradas.
