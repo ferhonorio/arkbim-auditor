@@ -560,13 +560,13 @@ function ColumnMultiPicker({
             className="inline-flex items-center gap-1 rounded-full border bg-secondary px-2 py-0.5 text-[11px]"
           >
             {c}
-            <button onClick={() => onChange(value.filter((x) => x !== c))}>
+            <button onClick={() => onChange(safeValue.filter((x) => x !== c))}>
               <X className="h-3 w-3" />
             </button>
           </span>
         ))}
       </div>
-      <Select value="" onValueChange={(v) => v && onChange([...value, v])}>
+      <Select value="" onValueChange={(v) => v && onChange([...safeValue, v])}>
         <SelectTrigger className="h-7 text-xs">
           <SelectValue placeholder="Adicionar coluna" />
         </SelectTrigger>
