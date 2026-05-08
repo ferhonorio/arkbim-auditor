@@ -138,9 +138,9 @@ export function AnaliseTab() {
   const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
 
   const visibleCols = cols;
-  const groupVisible = groupBy.filter(
-    (c) => !focusParam || c === focusParam || c === "Nome do arquivo",
-  );
+  // Always show every grouping column in the table — hiding them by focusParam
+  // breaks the visual logic of "same Type Mark, different Model = new row".
+  const groupVisible = groupBy;
 
   const addGroup = () => {
     const next = visibleCols.find((c) => !groupBy.includes(c));
