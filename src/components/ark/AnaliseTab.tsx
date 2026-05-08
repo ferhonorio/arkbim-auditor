@@ -245,7 +245,14 @@ export function AnaliseTab() {
           <p className="text-xs text-muted-foreground">Nenhuma regra ativa.</p>
         )}
         <div className="space-y-2">
-          {visualRules.map((r, i) => (
+          {visualRules.map((r, i) => {
+            const stats = ruleStats[i] ?? { totalKeys: 0, divergent: 0, consistent: 0, matched: 0, avgRows: 0 };
+            const noKey = !(r.keyColumns?.length);
+            const noCmp = !(r.compareColumns?.length);
+            const keyHasFile = (r.keyColumns ?? []).includes("Nome do arquivo");
+            const keyIsolatesPerFile =
+              keyHasFile && stats.totalKeys > 0 && stats.avgRows < 1.5;
+            return (
             <div
               key={r.id}
               className="rounded-md border p-3"
@@ -298,21 +305,28 @@ export function AnaliseTab() {
               </div>
               <div className="mt-2 grid gap-2 md:grid-cols-2">
                 <ColumnMultiPicker
-                  label="Parâmetro(s) comum(ns) — chave"
+                  label="Chave (o que identifica o MESMO item)"
                   cols={cols}
                   value={r.keyColumns}
                   onChange={(v) => updRule(r.id, { keyColumns: v })}
                 />
                 <ColumnMultiPicker
-                  label="Parâmetros comparados"
+                  label="Devem ser iguais (entre as linhas que compartilham a chave)"
                   cols={cols}
                   value={r.compareColumns}
                   onChange={(v) => updRule(r.id, { compareColumns: v })}
                 />
               </div>
-              <div className="mt-2 flex items-center gap-2">
+              <p className="mt-1 flex items-start gap-1 text-[10px] text-muted-foreground">
+                <InfoIcon className="mt-[2px] h-3 w-3 shrink-0" />
+                <span>
+                  Ex.: <strong>Chave</strong> = Type Mark; <strong>Devem ser iguais</strong> = Model, Manufacturer, Description.
+                  A regra acende quando o mesmo Type Mark aparece em arquivos diferentes com Model/Manufacturer divergente.
+                </span>
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <label className="text-[11px] font-medium text-muted-foreground">
-                  Aplicar quando comparação for:
+                  Pintar quando:
                 </label>
                 <Select
                   value={r.applyWhen ?? "inconsistent"}
@@ -320,21 +334,92 @@ export function AnaliseTab() {
                     updRule(r.id, { applyWhen: v as "inconsistent" | "consistent" })
                   }
                 >
-                  <SelectTrigger className="h-7 w-[220px] bg-background/70 text-xs">
+                  <SelectTrigger className="h-7 w-[280px] bg-background/70 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="inconsistent">
-                      Falsa (valores divergem)
+                      Houver divergência (valores diferem)
                     </SelectItem>
                     <SelectItem value="consistent">
-                      Verdadeira (valores iguais)
+                      Tudo for igual (valores coincidem)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <label className="ml-2 text-[11px] font-medium text-muted-foreground">
+                  Critério:
+                </label>
+                <Select
+                  value={r.matchMode ?? "any"}
+                  onValueChange={(v) =>
+                    updRule(r.id, { matchMode: v as "any" | "all" })
+                  }
+                >
+                  <SelectTrigger className="h-7 w-[260px] bg-background/70 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">
+                      Qualquer parâmetro divergente conta
+                    </SelectItem>
+                    <SelectItem value="all">
+                      Apenas se TODOS divergirem
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Live mini-stats */}
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                <span className="rounded bg-background/70 px-1.5 py-0.5">
+                  Chaves: <strong>{stats.totalKeys}</strong>
+                </span>
+                <span className="rounded bg-background/70 px-1.5 py-0.5">
+                  Divergentes: <strong>{stats.divergent}</strong>
+                </span>
+                <span className="rounded bg-background/70 px-1.5 py-0.5">
+                  Consistentes: <strong>{stats.consistent}</strong>
+                </span>
+                <span className="rounded bg-background/70 px-1.5 py-0.5">
+                  Aplica em: <strong>{stats.matched}</strong>
+                </span>
+                <span className="rounded bg-background/70 px-1.5 py-0.5 text-muted-foreground">
+                  Linhas/chave (médio): {stats.avgRows.toFixed(1)}
+                </span>
+              </div>
+
+              {/* Inline alerts */}
+              {(noKey || noCmp) && (
+                <div className="mt-2 flex items-start gap-1.5 rounded border border-destructive/40 bg-destructive/10 p-2 text-[11px] text-destructive">
+                  <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Regra incompleta: defina ao menos uma coluna em <strong>Chave</strong> e em <strong>Devem ser iguais</strong>.
+                  </span>
+                </div>
+              )}
+              {!noKey && !noCmp && keyIsolatesPerFile && (
+                <div className="mt-2 flex items-start gap-1.5 rounded border border-yellow-400 bg-yellow-50 p-2 text-[11px] text-yellow-900">
+                  <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Atenção: usar <strong>Nome do arquivo</strong> como chave isola cada arquivo em
+                    grupos separados (média de {stats.avgRows.toFixed(1)} linha por chave), então linhas de
+                    arquivos diferentes nunca são comparadas. Provavelmente você quis colocar
+                    <strong> Nome do arquivo</strong> em <em>Devem ser iguais</em> e algo como
+                    <strong> Type Mark</strong> em <em>Chave</em>.
+                  </span>
+                </div>
+              )}
+              {!noKey && !noCmp && stats.totalKeys > 0 && stats.matched === 0 && !keyIsolatesPerFile && (
+                <div className="mt-2 flex items-start gap-1.5 rounded border bg-background/70 p-2 text-[11px] text-muted-foreground">
+                  <InfoIcon className="mt-[1px] h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    A regra não casou com nenhuma linha. Revise a configuração de
+                    <em> Pintar quando</em> e <em>Critério</em> ou as colunas escolhidas.
+                  </span>
+                </div>
+              )}
             </div>
-          ))}
+          );})}
         </div>
       </Section>
 
