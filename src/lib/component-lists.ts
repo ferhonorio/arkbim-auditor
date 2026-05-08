@@ -1,5 +1,6 @@
 import type { Row } from "./parse";
-import { applyFilters, type Filter } from "./grouping";
+
+export const KEY_COLUMN = "Type Mark";
 
 export interface FileOccurrence {
   file: string;
@@ -8,9 +9,9 @@ export interface FileOccurrence {
 }
 
 export interface ConsolidatedItem {
-  key: string;
-  keyValues: Record<string, string>;
+  key: string; // Type Mark value
   params: Record<string, string>;
+  columns: string[]; // columns saved when item was last consolidated
   occurrences: FileOccurrence[];
   totalQuantity: number;
   firstSeenAt: number;
@@ -19,12 +20,8 @@ export interface ConsolidatedItem {
 
 export interface ComponentList {
   id: string;
-  name: string;
+  name: string; // category name
   icon?: string;
-  filters: Filter[];
-  excludeFilters: Filter[];
-  keyColumns: string[];
-  paramColumns: string[];
   fileColumn: string;
   idCol: string;
   columnAliases: Record<string, string>;
@@ -34,32 +31,22 @@ export interface ComponentList {
   updatedAt: number;
 }
 
-export type ConsolidationMode = "merge" | "replace" | "only-new" | "ignore-conflicts";
+export type ConsolidationMode = "overwrite" | "only-new";
 
-const buildKey = (cols: string[], r: Row) =>
-  cols.map((c) => (r[c] ?? "").trim()).join("\u0001");
-
-const norm = (v: string) => (v ?? "").trim().toLowerCase();
-
-// Inverse of applyFilters: keep rows that DON'T match any of the exclude filters.
-// An exclude filter is a positive condition that, when matched, removes the row.
-export function applyExcludeFilters(rows: Row[], excludes: Filter[]): Row[] {
-  if (!excludes.length) return rows;
-  return rows.filter((r) => {
-    // row passes if it does NOT satisfy ANY exclude filter
-    for (const f of excludes) {
-      if (!f.column) continue;
-      const matched = applyFilters([r], [f]).length > 0;
-      if (matched) return false;
-    }
-    return true;
-  });
+export interface ConflictReport {
+  typeMark: string;
+  existing: Record<string, string>;
+  incoming: Record<string, string>;
+  differingCols: string[];
 }
 
-export function selectListRows(rows: Row[], list: ComponentList): Row[] {
-  let out = applyFilters(rows, list.filters);
-  out = applyExcludeFilters(out, list.excludeFilters);
-  return out;
+export interface ConsolidatePlan {
+  preview: ConsolidatedItem[];
+  newItems: ConsolidatedItem[];
+  conflicts: ConflictReport[];
+  unchanged: ConsolidatedItem[];
+  invalidRows: number;
+  newFiles: string[];
 }
 
 const canonical = (rows: Row[], col: string): string => {
@@ -80,41 +67,40 @@ const canonical = (rows: Row[], col: string): string => {
   return best;
 };
 
-export interface PreviewItem extends ConsolidatedItem {
-  conflicts: Record<string, string[]>; // param -> distinct values when >1
-}
-
-// Build a "preview" of what a consolidation would produce from rows alone,
-// without merging with existing items.
-export function previewConsolidation(
+export function planConsolidation(
   rows: Row[],
+  columns: string[],
   list: ComponentList,
-): PreviewItem[] {
-  const selected = selectListRows(rows, list);
+): ConsolidatePlan {
+  // Param columns: everything from `columns` except Type Mark and the file column
+  const paramCols = columns.filter(
+    (c) => c && c !== KEY_COLUMN && c !== list.fileColumn,
+  );
   const buckets = new Map<string, Row[]>();
-  for (const r of selected) {
-    const k = buildKey(list.keyColumns, r);
-    if (!k.replaceAll("\u0001", "").trim()) continue;
+  let invalid = 0;
+  for (const r of rows) {
+    const k = (r[KEY_COLUMN] ?? "").trim();
+    if (!k) {
+      invalid++;
+      continue;
+    }
     if (!buckets.has(k)) buckets.set(k, []);
     buckets.get(k)!.push(r);
   }
-  const now = Date.now();
-  const out: PreviewItem[] = [];
-  for (const [key, grp] of buckets) {
-    const keyValues: Record<string, string> = {};
-    for (const c of list.keyColumns) keyValues[c] = (grp[0][c] ?? "").trim();
 
+  const now = Date.now();
+  const existingByKey = new Map(list.items.map((i) => [i.key, i]));
+  const knownFiles = new Set(list.sourceFiles);
+  const newFiles = new Set<string>();
+
+  const preview: ConsolidatedItem[] = [];
+  const newItems: ConsolidatedItem[] = [];
+  const conflicts: ConflictReport[] = [];
+  const unchanged: ConsolidatedItem[] = [];
+
+  for (const [key, grp] of buckets) {
     const params: Record<string, string> = {};
-    const conflicts: Record<string, string[]> = {};
-    for (const c of list.paramColumns) {
-      params[c] = canonical(grp, c);
-      const distinct = new Set<string>();
-      for (const r of grp) {
-        const v = (r[c] ?? "").trim();
-        if (v) distinct.add(v);
-      }
-      if (distinct.size > 1) conflicts[c] = Array.from(distinct);
-    }
+    for (const c of paramCols) params[c] = canonical(grp, c);
 
     const byFile = new Map<string, Row[]>();
     for (const r of grp) {
@@ -122,132 +108,135 @@ export function previewConsolidation(
       if (!byFile.has(f)) byFile.set(f, []);
       byFile.get(f)!.push(r);
     }
+    for (const f of byFile.keys()) if (!knownFiles.has(f)) newFiles.add(f);
     const occurrences: FileOccurrence[] = Array.from(byFile, ([file, rs]) => ({
       file,
       quantity: rs.length,
       ids: rs.map((r) => r[list.idCol]).filter(Boolean),
     })).sort((a, b) => a.file.localeCompare(b.file));
 
-    out.push({
+    const item: ConsolidatedItem = {
       key,
-      keyValues,
       params,
+      columns: paramCols,
       occurrences,
       totalQuantity: occurrences.reduce((s, o) => s + o.quantity, 0),
       firstSeenAt: now,
       lastUpdatedAt: now,
-      conflicts,
-    });
-  }
-  out.sort((a, b) => {
-    for (const c of Object.keys(a.keyValues)) {
-      const cmp = (a.keyValues[c] ?? "").localeCompare(b.keyValues[c] ?? "", undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-      if (cmp !== 0) return cmp;
-    }
-    return 0;
-  });
-  return out;
-}
+    };
+    preview.push(item);
 
-export function distinctFiles(rows: Row[], fileColumn: string): string[] {
-  const set = new Set<string>();
-  for (const r of rows) {
-    const f = (r[fileColumn] ?? "").trim();
-    if (f) set.add(f);
-  }
-  return Array.from(set).sort();
-}
-
-export interface ConsolidateOutcome {
-  items: ConsolidatedItem[];
-  added: number;
-  updated: number;
-  unchanged: number;
-  newFiles: string[];
-}
-
-// Merge a fresh preview into existing items per the selected mode.
-export function consolidateRows(
-  rows: Row[],
-  list: ComponentList,
-  mode: ConsolidationMode,
-): ConsolidateOutcome {
-  const fresh = previewConsolidation(rows, list);
-  const existing = new Map(list.items.map((i) => [i.key, { ...i }]));
-  const knownFiles = new Set(list.sourceFiles);
-  const seenNewFiles = new Set<string>();
-  let added = 0;
-  let updated = 0;
-  let unchanged = 0;
-  const now = Date.now();
-
-  for (const f of fresh) {
-    for (const o of f.occurrences) {
-      if (!knownFiles.has(o.file)) seenNewFiles.add(o.file);
-    }
-
-    const prev = existing.get(f.key);
+    const prev = existingByKey.get(key);
     if (!prev) {
-      // brand new item
-      const { conflicts: _c, ...item } = f;
-      existing.set(f.key, item);
-      added++;
-      continue;
-    }
-
-    if (mode === "only-new") {
-      unchanged++;
-      continue;
-    }
-
-    // Merge occurrences: replace per-file, preserve other files
-    const occByFile = new Map(prev.occurrences.map((o) => [o.file, o]));
-    for (const o of f.occurrences) occByFile.set(o.file, o);
-    const occurrences = Array.from(occByFile.values()).sort((a, b) =>
-      a.file.localeCompare(b.file),
-    );
-
-    let params = prev.params;
-    if (mode === "merge") {
-      // merge: prefer fresh value when present and different
-      params = { ...prev.params };
-      for (const c of list.paramColumns) {
-        const v = f.params[c];
-        if (v) params[c] = v;
+      newItems.push(item);
+    } else {
+      const differing: string[] = [];
+      for (const c of paramCols) {
+        const v = item.params[c] ?? "";
+        const old = prev.params[c] ?? "";
+        if (v && old && v !== old) differing.push(c);
       }
-    } else if (mode === "replace") {
-      params = { ...prev.params, ...f.params };
-    } else if (mode === "ignore-conflicts") {
-      // keep prev params untouched, only refresh occurrences
-      params = prev.params;
+      if (differing.length) {
+        conflicts.push({
+          typeMark: key,
+          existing: prev.params,
+          incoming: item.params,
+          differingCols: differing,
+        });
+      } else {
+        unchanged.push(item);
+      }
     }
-
-    existing.set(f.key, {
-      ...prev,
-      keyValues: f.keyValues,
-      params,
-      occurrences,
-      totalQuantity: occurrences.reduce((s, o) => s + o.quantity, 0),
-      lastUpdatedAt: now,
-    });
-    updated++;
   }
+
+  preview.sort((a, b) =>
+    a.key.localeCompare(b.key, undefined, { numeric: true, sensitivity: "base" }),
+  );
 
   return {
-    items: Array.from(existing.values()),
-    added,
-    updated,
+    preview,
+    newItems,
+    conflicts,
     unchanged,
-    newFiles: Array.from(seenNewFiles),
+    invalidRows: invalid,
+    newFiles: Array.from(newFiles),
   };
 }
 
-// Detect files in current dataset not yet consolidated into `list`.
-export function detectNewFiles(rows: Row[], list: ComponentList): string[] {
-  const all = distinctFiles(rows, list.fileColumn);
-  const known = new Set(list.sourceFiles);
-  return all.filter((f) => !known.has(f));
+export interface CommitOutcome {
+  items: ConsolidatedItem[];
+  added: number;
+  updated: number;
+  skipped: number;
+  newFiles: string[];
+}
+
+export function commitConsolidation(
+  list: ComponentList,
+  plan: ConsolidatePlan,
+  mode: ConsolidationMode,
+): CommitOutcome {
+  const map = new Map(list.items.map((i) => [i.key, { ...i }]));
+  const now = Date.now();
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  const mergeOccurrences = (prev: ConsolidatedItem, next: ConsolidatedItem) => {
+    const byFile = new Map(prev.occurrences.map((o) => [o.file, o]));
+    for (const o of next.occurrences) byFile.set(o.file, o);
+    const occurrences = Array.from(byFile.values()).sort((a, b) =>
+      a.file.localeCompare(b.file),
+    );
+    return {
+      occurrences,
+      totalQuantity: occurrences.reduce((s, o) => s + o.quantity, 0),
+    };
+  };
+
+  const mergeColumns = (a: string[], b: string[]) =>
+    Array.from(new Set([...a, ...b]));
+
+  for (const item of plan.preview) {
+    const prev = map.get(item.key);
+    if (!prev) {
+      map.set(item.key, item);
+      added++;
+      continue;
+    }
+    const occ = mergeOccurrences(prev, item);
+    if (mode === "only-new") {
+      // keep params untouched, but always update occurrences history
+      map.set(item.key, {
+        ...prev,
+        ...occ,
+        columns: mergeColumns(prev.columns, item.columns),
+        lastUpdatedAt: now,
+      });
+      skipped++;
+    } else {
+      // overwrite params (only for differing/incoming non-empty values)
+      const params = { ...prev.params };
+      for (const c of item.columns) {
+        const v = item.params[c];
+        if (v) params[c] = v;
+      }
+      map.set(item.key, {
+        ...prev,
+        params,
+        columns: mergeColumns(prev.columns, item.columns),
+        ...occ,
+        lastUpdatedAt: now,
+      });
+      updated++;
+    }
+  }
+
+  return {
+    items: Array.from(map.values()),
+    added,
+    updated,
+    skipped,
+    newFiles: plan.newFiles,
+  };
 }
