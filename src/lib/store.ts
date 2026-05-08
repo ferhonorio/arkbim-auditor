@@ -5,8 +5,15 @@ import type {
   AuditRule,
   ConsolidationConfig,
   Filter,
+  ReferenceItem,
   VisualRule,
 } from "./grouping";
+
+export interface ConsolidatedSnapshot {
+  reference: ReferenceItem[];
+  cfg: ConsolidationConfig;
+  savedAt: number;
+}
 
 export interface SavedPreset<T> {
   id: string;
