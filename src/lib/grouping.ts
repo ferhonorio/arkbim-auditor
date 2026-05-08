@@ -142,15 +142,17 @@ export function normalizeRule(r: VisualRule | LegacyVisualRule): VisualRule {
 
 export function computeInconsistentKeys(rule: VisualRule, rows: Row[]): Set<string> {
   const bad = new Set<string>();
-  if (!rule.keyColumns.length || !rule.compareColumns.length) return bad;
+  const keyCols = rule.keyColumns ?? [];
+  const cmpCols = rule.compareColumns ?? [];
+  if (!keyCols.length || !cmpCols.length) return bad;
   const groups = new Map<string, Row[]>();
   for (const r of rows) {
-    const k = buildKey(rule.keyColumns, r);
+    const k = buildKey(keyCols, r);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(r);
   }
   for (const [k, grp] of groups) {
-    for (const c of rule.compareColumns) {
+    for (const c of cmpCols) {
       const set = new Set<string>();
       for (const r of grp) {
         const v = (r[c] ?? "").trim().toLowerCase();
@@ -170,9 +172,11 @@ export function ruleMatchesGroup(
   g: GroupedRow,
   badKeys: Set<string>,
 ): boolean {
-  if (!rule.keyColumns.length || !rule.compareColumns.length) return false;
+  const keyCols = rule.keyColumns ?? [];
+  const cmpCols = rule.compareColumns ?? [];
+  if (!keyCols.length || !cmpCols.length) return false;
   for (const r of g.rawRows) {
-    const k = buildKey(rule.keyColumns, r);
+    const k = buildKey(keyCols, r);
     if (badKeys.has(k)) return true;
   }
   return false;
