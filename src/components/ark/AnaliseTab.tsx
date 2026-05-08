@@ -600,14 +600,13 @@ export function AnaliseTab() {
               {pageGroups.map((g) => {
                 let bg: string | undefined;
                 let why: string | undefined;
+                let keyRowsCount: number | undefined;
                 for (let idx = 0; idx < visualRules.length; idx++) {
                   if (ruleMatchesGroup(visualRules[idx], g, badKeysPerRule[idx])) {
                     bg = visualRules[idx].color;
-                    // Build "por quê" explanation
                     const rule = visualRules[idx];
                     const evals = evalsPerRule[idx];
                     const keyCols = rule.keyColumns ?? [];
-                    // Find first rawRow whose key is in matching set
                     let matchedKey = "";
                     for (const r of g.rawRows) {
                       const k = keyCols.map((c) => (r[c] ?? "").trim()).join("\u0001");
@@ -615,6 +614,7 @@ export function AnaliseTab() {
                     }
                     const ev = matchedKey ? evals.get(matchedKey) : undefined;
                     if (ev) {
+                      keyRowsCount = ev.rowsCount;
                       const keyDesc = keyCols
                         .map((c) => `${c}="${ev.keyValues[c] ?? ""}"`)
                         .join(", ");
@@ -629,7 +629,7 @@ export function AnaliseTab() {
                             .map(([c, vals]) => `  • ${c}: ${vals.join(" | ")}`)
                             .join("\n")
                         : "";
-                      why = header + body + `\n\nObs.: esta linha tem qtd ${g.quantity}, mas a regra avalia TODAS as linhas brutas que compartilham a chave (não só este agrupamento).`;
+                      why = header + body + `\n\nObs.: esta linha agrupada tem qtd ${g.quantity}; a regra compara TODAS as ${ev.rowsCount} linhas brutas que compartilham a chave.`;
                     }
                     break;
                   }
@@ -662,7 +662,19 @@ export function AnaliseTab() {
                         </div>
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-medium">{g.quantity}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      <div className="flex items-center justify-end gap-2">
+                        {keyRowsCount !== undefined && (
+                          <span
+                            className="rounded-full border bg-background/70 px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground"
+                            title={`Linhas brutas que compartilham a chave da regra: ${keyRowsCount}`}
+                          >
+                            chave: {keyRowsCount}
+                          </span>
+                        )}
+                        <span>{g.quantity}</span>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 );
               })}
