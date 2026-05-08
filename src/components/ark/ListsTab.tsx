@@ -50,6 +50,7 @@ import type { Filter, FilterOp } from "@/lib/grouping";
 import {
   detectNewFiles,
   previewConsolidation,
+  selectListRows,
   type ComponentList,
   type ConsolidationMode,
 } from "@/lib/component-lists";
@@ -288,8 +289,19 @@ function ListEditor({ list, onClose }: { list: ComponentList; onClose: () => voi
   const setIncludeFilters = (filters: Filter[]) => update(list.id, { filters });
   const setExcludeFilters = (excludeFilters: Filter[]) => update(list.id, { excludeFilters });
 
+  const filteredRows = useMemo(() => selectListRows(dataset.rows, list), [dataset.rows, list]);
   const preview = useMemo(() => previewConsolidation(dataset.rows, list), [dataset.rows, list]);
   const conflictsCount = preview.filter((p) => Object.keys(p.conflicts).length > 0).length;
+  const previewCols = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of [...list.keyColumns, ...list.paramColumns, list.fileColumn, list.idCol]) {
+      if (c && !seen.has(c)) { seen.add(c); out.push(c); }
+    }
+    return out;
+  }, [list.keyColumns, list.paramColumns, list.fileColumn, list.idCol]);
+  const [showRows, setShowRows] = useState(false);
+  const PREVIEW_LIMIT = 100;
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4">
@@ -372,17 +384,64 @@ function ListEditor({ list, onClose }: { list: ComponentList; onClose: () => voi
         </div>
       </div>
 
-      <div className="rounded-md border bg-background/50 p-3 text-xs">
-        <div className="font-medium">Pré-visualização</div>
-        <div className="text-muted-foreground">
-          {preview.length} item(ns) único(s) ·{" "}
-          {preview.reduce((s, p) => s + p.totalQuantity, 0)} unidades totais
-          {conflictsCount > 0 && (
-            <span className="ml-1 text-amber-600">
-              · {conflictsCount} item(ns) com valores divergentes entre arquivos
-            </span>
-          )}
+      <div className="rounded-md border bg-background/50 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+          <div>
+            <div className="font-medium">Pré-visualização</div>
+            <div className="text-muted-foreground">
+              {filteredRows.length} linha(s) após filtros · {preview.length} item(ns) único(s) ·{" "}
+              {preview.reduce((s, p) => s + p.totalQuantity, 0)} unidades totais
+              {conflictsCount > 0 && (
+                <span className="ml-1 text-amber-600">
+                  · {conflictsCount} item(ns) com valores divergentes entre arquivos
+                </span>
+              )}
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!filteredRows.length || !previewCols.length}
+            onClick={() => setShowRows((v) => !v)}
+          >
+            {showRows ? (
+              <><ChevronDown className="mr-1 h-3.5 w-3.5" />Ocultar dados filtrados</>
+            ) : (
+              <><ChevronRight className="mr-1 h-3.5 w-3.5" />Ver dados filtrados</>
+            )}
+          </Button>
         </div>
+        {showRows && previewCols.length > 0 && (
+          <div className="max-h-[420px] overflow-auto border-t">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card">
+                <TableRow>
+                  {previewCols.map((c) => (
+                    <TableHead key={c} className="whitespace-nowrap text-[11px]">
+                      {c}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRows.slice(0, PREVIEW_LIMIT).map((r, i) => (
+                  <TableRow key={i}>
+                    {previewCols.map((c) => (
+                      <TableCell key={c} className="whitespace-nowrap py-1 text-[11px]">
+                        {r[c] ?? ""}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {filteredRows.length > PREVIEW_LIMIT && (
+              <div className="border-t p-2 text-center text-[11px] text-muted-foreground">
+                Exibindo {PREVIEW_LIMIT} de {filteredRows.length} linhas. Use a consolidação ou exportação para ver tudo.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
