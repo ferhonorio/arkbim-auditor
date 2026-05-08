@@ -540,32 +540,33 @@ function ColumnMultiPicker({
 }: {
   label: string;
   cols: string[];
-  value: string[];
+  value: string[] | undefined;
   onChange: (v: string[]) => void;
 }) {
-  const remaining = cols.filter((c) => !value.includes(c));
+  const safeValue = Array.isArray(value) ? value : [];
+  const remaining = cols.filter((c) => !safeValue.includes(c));
   return (
     <div className="rounded bg-background/70 p-2">
       <label className="mb-1 block text-[10px] font-medium uppercase text-muted-foreground">
         {label}
       </label>
       <div className="mb-2 flex flex-wrap gap-1">
-        {value.length === 0 && (
+        {safeValue.length === 0 && (
           <span className="text-[11px] text-muted-foreground">Nenhuma coluna</span>
         )}
-        {value.map((c) => (
+        {safeValue.map((c) => (
           <span
             key={c}
             className="inline-flex items-center gap-1 rounded-full border bg-secondary px-2 py-0.5 text-[11px]"
           >
             {c}
-            <button onClick={() => onChange(value.filter((x) => x !== c))}>
+            <button onClick={() => onChange(safeValue.filter((x) => x !== c))}>
               <X className="h-3 w-3" />
             </button>
           </span>
         ))}
       </div>
-      <Select value="" onValueChange={(v) => v && onChange([...value, v])}>
+      <Select value="" onValueChange={(v) => v && onChange([...safeValue, v])}>
         <SelectTrigger className="h-7 text-xs">
           <SelectValue placeholder="Adicionar coluna" />
         </SelectTrigger>
