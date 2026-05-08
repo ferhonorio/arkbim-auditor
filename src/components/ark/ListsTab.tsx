@@ -289,8 +289,19 @@ function ListEditor({ list, onClose }: { list: ComponentList; onClose: () => voi
   const setIncludeFilters = (filters: Filter[]) => update(list.id, { filters });
   const setExcludeFilters = (excludeFilters: Filter[]) => update(list.id, { excludeFilters });
 
+  const filteredRows = useMemo(() => selectListRows(dataset.rows, list), [dataset.rows, list]);
   const preview = useMemo(() => previewConsolidation(dataset.rows, list), [dataset.rows, list]);
   const conflictsCount = preview.filter((p) => Object.keys(p.conflicts).length > 0).length;
+  const previewCols = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of [...list.keyColumns, ...list.paramColumns, list.fileColumn, list.idCol]) {
+      if (c && !seen.has(c)) { seen.add(c); out.push(c); }
+    }
+    return out;
+  }, [list.keyColumns, list.paramColumns, list.fileColumn, list.idCol]);
+  const [showRows, setShowRows] = useState(false);
+  const PREVIEW_LIMIT = 100;
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4">
