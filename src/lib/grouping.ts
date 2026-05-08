@@ -226,6 +226,8 @@ export function computeMatchingKeys(rule: VisualRule, rows: Row[]): Set<string> 
   const evals = evaluateRule(rule, rows);
   const wantInconsistent = (rule.applyWhen ?? "inconsistent") === "inconsistent";
   for (const [k, ev] of evals) {
+    // Chave sem comparáveis (1 só linha) nunca casa com regra visual
+    if (!ev.comparable) continue;
     if (wantInconsistent ? ev.inconsistent : !ev.inconsistent) out.add(k);
   }
   return out;
