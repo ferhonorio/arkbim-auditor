@@ -436,9 +436,16 @@ export interface AuditFinding {
   inconsistentColumn: string;
   values: string[];
   ids: string[];
+  files: string[]; // arquivos onde a inconsistencia ocorre
+  valuesByFile: Record<string, string[]>; // file -> distinct values
 }
 
-export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFinding[] {
+export function runAudit(
+  rows: Row[],
+  rules: AuditRule[],
+  idCol = "ID",
+  fileColumn = "Nome do arquivo",
+): AuditFinding[] {
   const findings: AuditFinding[] = [];
   for (const rule of rules) {
     if (!rule.groupBy.length || !rule.compareCols.length) continue;
@@ -458,6 +465,14 @@ export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFi
         if (distinct.size > 1) {
           const groupValues: Record<string, string> = {};
           for (const k of rule.groupBy) groupValues[k] = (grp[0][k] ?? "").trim();
+          const valuesByFile: Record<string, string[]> = {};
+          for (const r of grp) {
+            const f = (r[fileColumn] ?? "").trim() || "(sem arquivo)";
+            const v = (r[c] ?? "").trim();
+            if (!v) continue;
+            if (!valuesByFile[f]) valuesByFile[f] = [];
+            if (!valuesByFile[f].includes(v)) valuesByFile[f].push(v);
+          }
           findings.push({
             ruleId: rule.id,
             ruleName: rule.name,
@@ -466,6 +481,8 @@ export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFi
             inconsistentColumn: c,
             values: Array.from(distinct),
             ids: grp.map((r) => r[idCol]).filter(Boolean),
+            files: Object.keys(valuesByFile),
+            valuesByFile,
           });
         }
       }
@@ -473,3 +490,4 @@ export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFi
   }
   return findings;
 }
+
