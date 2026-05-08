@@ -268,11 +268,34 @@ export function AnaliseTab() {
                   onChange={(v) => updRule(r.id, { keyColumns: v })}
                 />
                 <ColumnMultiPicker
-                  label="Parâmetros comparados (devem ser iguais)"
+                  label="Parâmetros comparados"
                   cols={cols}
                   value={r.compareColumns}
                   onChange={(v) => updRule(r.id, { compareColumns: v })}
                 />
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-[11px] font-medium text-muted-foreground">
+                  Aplicar quando comparação for:
+                </label>
+                <Select
+                  value={r.applyWhen ?? "inconsistent"}
+                  onValueChange={(v) =>
+                    updRule(r.id, { applyWhen: v as "inconsistent" | "consistent" })
+                  }
+                >
+                  <SelectTrigger className="h-7 w-[220px] bg-background/70 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inconsistent">
+                      Falsa (valores divergem)
+                    </SelectItem>
+                    <SelectItem value="consistent">
+                      Verdadeira (valores iguais)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           ))}
