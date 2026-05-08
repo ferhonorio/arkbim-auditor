@@ -172,6 +172,54 @@ export function DiagnosticoTab() {
       </div>
 
       <div className="rounded-lg border bg-card p-4">
+        <h3 className="text-sm font-semibold">Lista Consolidada (oficial)</h3>
+        {!snapshot && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Nenhuma lista oficial salva. Use a aba <strong>Lista consolidada</strong>.
+          </p>
+        )}
+        {snapshot && consolidatedComp && (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Salva em {new Date(snapshot.savedAt).toLocaleString("pt-BR")} ·{" "}
+              {snapshot.reference.length} itens · chave [{snapshot.cfg.keyColumns.join(", ")}] · valida [
+              {snapshot.cfg.paramColumns.join(", ")}]
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+              <Info label="Conformes" value={String(consolidatedComp.totals.conformes)} />
+              <Info label="Divergentes" value={String(consolidatedComp.totals.divergentes)} tone={consolidatedComp.totals.divergentes ? "destructive" : "ok"} />
+              <Info label="Faltando" value={String(consolidatedComp.totals.faltando)} tone={consolidatedComp.totals.faltando ? "destructive" : "ok"} />
+              <Info label="Extra" value={String(consolidatedComp.totals.extra)} />
+            </div>
+            {consolidatedComp.summary.length > 0 && (
+              <div className="mt-3 overflow-x-auto rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Arquivo</TableHead>
+                      <TableHead className="text-right">Divergentes</TableHead>
+                      <TableHead className="text-right">Faltando</TableHead>
+                      <TableHead className="text-right">Extra</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {consolidatedComp.summary.map((s) => (
+                      <TableRow key={s.file} className={s.divergentes + s.faltando + s.extra > 0 ? "bg-destructive/5" : ""}>
+                        <TableCell className="font-medium">{s.file}</TableCell>
+                        <TableCell className="text-right">{s.divergentes}</TableCell>
+                        <TableCell className="text-right">{s.faltando}</TableCell>
+                        <TableCell className="text-right">{s.extra}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="rounded-lg border bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold">Regras visuais — formato</h3>
