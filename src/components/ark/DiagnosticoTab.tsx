@@ -307,6 +307,10 @@ export function DiagnosticoTab() {
         </div>
       </div>
 
+      <div className="rounded-lg border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Logs ({logs.length})</h3>
             <p className="text-xs text-muted-foreground">
               Erros JS, promessas rejeitadas e console.error desta sessão.
             </p>
