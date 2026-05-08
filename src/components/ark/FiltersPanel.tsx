@@ -1,4 +1,4 @@
-import { Plus, Minus, Save, Trash2 } from "lucide-react";
+import { Plus, Minus, Save, Trash2, ChevronsUpDown, Check } from "lucide-react";
 import { useArk } from "@/lib/store";
 import {
   Select,
@@ -9,9 +9,19 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import type { Filter, FilterOp } from "@/lib/grouping";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 const OPS: FilterOp[] = [
   "preenchido",
