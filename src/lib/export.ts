@@ -1,9 +1,10 @@
 import * as XLSX from "xlsx";
-import type { Row } from "./parse";
+
+type AnyRow = Record<string, string | number | null | undefined>;
 
 export function exportXLSX(
   filename: string,
-  sheets: { name: string; rows: Row[]; columns?: string[] }[],
+  sheets: { name: string; rows: AnyRow[]; columns?: string[] }[],
 ) {
   const wb = XLSX.utils.book_new();
   for (const s of sheets) {
