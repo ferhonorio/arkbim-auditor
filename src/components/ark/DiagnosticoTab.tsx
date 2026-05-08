@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useArk } from "@/lib/store";
 import {
   RULES_SCHEMA_VERSION,
@@ -8,6 +8,7 @@ import {
   subscribeLogs,
   type DiagLog,
 } from "@/lib/diagnostics";
+import { applyFilters, evaluateRule } from "@/lib/grouping";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
