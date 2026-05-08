@@ -8,7 +8,7 @@ import {
   subscribeLogs,
   type DiagLog,
 } from "@/lib/diagnostics";
-import { applyFilters, evaluateRule } from "@/lib/grouping";
+import { applyFilters, compareToConsolidated, evaluateRule } from "@/lib/grouping";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,6 +30,7 @@ export function DiagnosticoTab() {
   const rulePresets = useArk((s) => s.rulePresets);
   const groupingPresets = useArk((s) => s.groupingPresets);
   const setVisualRules = useArk((s) => s.setVisualRules);
+  const snapshot = useArk((s) => s.consolidatedSnapshot);
 
   const [logs, setLogs] = useState<DiagLog[]>(getLogs());
   useEffect(() => {
@@ -42,6 +43,11 @@ export function DiagnosticoTab() {
   const filteredRows = useMemo(
     () => (dataset ? applyFilters(dataset.rows, filters) : []),
     [dataset, filters],
+  );
+
+  const consolidatedComp = useMemo(
+    () => (snapshot ? compareToConsolidated(filteredRows, snapshot) : null),
+    [filteredRows, snapshot],
   );
 
   // For each visual rule, build an application report: keys evaluated,
