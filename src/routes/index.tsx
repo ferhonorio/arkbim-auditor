@@ -8,7 +8,7 @@ import { FiltersPanel } from "@/components/ark/FiltersPanel";
 
 import { AnaliseTab } from "@/components/ark/AnaliseTab";
 import { AuditoriaTab } from "@/components/ark/AuditoriaTab";
-import { ConsolidadaTab } from "@/components/ark/ConsolidadaTab";
+import { ListsTab } from "@/components/ark/ListsTab";
 import { DiagnosticoTab } from "@/components/ark/DiagnosticoTab";
 import { useArk } from "@/lib/store";
 import { installGlobalErrorCapture } from "@/lib/diagnostics";
@@ -84,7 +84,7 @@ function Index() {
           <Tabs defaultValue="analise">
             <TabsList>
               <TabsTrigger value="analise">Analise e agrupamento</TabsTrigger>
-              <TabsTrigger value="consolidada">Lista consolidada</TabsTrigger>
+              <TabsTrigger value="consolidada">Listas consolidadas</TabsTrigger>
               <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>
               <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
             </TabsList>
@@ -92,7 +92,7 @@ function Index() {
               <AnaliseTab />
             </TabsContent>
             <TabsContent value="consolidada" className="mt-4">
-              <ConsolidadaTab />
+              <ListsTab />
             </TabsContent>
             <TabsContent value="auditoria" className="mt-4">
               <AuditoriaTab />
