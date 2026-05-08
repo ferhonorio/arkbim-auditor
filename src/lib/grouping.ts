@@ -491,3 +491,114 @@ export function runAudit(
   return findings;
 }
 
+
+// === Consolidated comparison (against frozen snapshot) ===
+
+export interface ConsolidatedFinding {
+  file: string;
+  status: DivergenceStatus;
+  key: string;
+  keyValues: Record<string, string>;
+  column?: string;
+  expected?: string;
+  found?: string;
+  ids: string[];
+}
+
+export interface ConsolidatedComparison {
+  findings: ConsolidatedFinding[];
+  summary: { file: string; conformes: number; divergentes: number; faltando: number; extra: number }[];
+  totals: { conformes: number; divergentes: number; faltando: number; extra: number };
+}
+
+export function compareToConsolidated(
+  rows: Row[],
+  snapshot: { reference: ReferenceItem[]; cfg: ConsolidationConfig },
+  idCol = "ID",
+): ConsolidatedComparison {
+  const { cfg, reference } = snapshot;
+  const fileColumn = cfg.fileColumn;
+  const refMap = new Map<string, ReferenceItem>();
+  for (const r of reference) refMap.set(r.key, r);
+
+  const filesSet = new Set<string>();
+  for (const r of rows) {
+    const f = r[fileColumn];
+    if (f) filesSet.add(f);
+  }
+
+  const findings: ConsolidatedFinding[] = [];
+  const summary: ConsolidatedComparison["summary"] = [];
+  const totals = { conformes: 0, divergentes: 0, faltando: 0, extra: 0 };
+
+  for (const file of filesSet) {
+    const fileRows = rows.filter((r) => r[fileColumn] === file);
+    const groups = new Map<string, Row[]>();
+    for (const r of fileRows) {
+      const key = buildKey(cfg.keyColumns, r);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(r);
+    }
+    let conformes = 0, divergentes = 0, faltando = 0, extra = 0;
+    for (const [key, ref] of refMap) {
+      const grp = groups.get(key);
+      if (!grp) {
+        faltando++;
+        findings.push({
+          file, status: "Faltando", key, keyValues: ref.keyValues, ids: [],
+        });
+        continue;
+      }
+      const diffs: Array<[string, string, string]> = [];
+      for (const c of cfg.paramColumns) {
+        const found = canonical(grp, c);
+        if (!eqVal(ref.params[c] ?? "", found)) {
+          diffs.push([c, ref.params[c] ?? "", found]);
+        }
+      }
+      if (diffs.length === 0) {
+        conformes++;
+      } else {
+        divergentes++;
+        for (const [col, expected, found] of diffs) {
+          findings.push({
+            file, status: "Divergente", key, keyValues: ref.keyValues,
+            column: col, expected, found,
+            ids: grp.map((r) => r[idCol]).filter(Boolean),
+          });
+        }
+      }
+    }
+    for (const [key, grp] of groups) {
+      if (refMap.has(key)) continue;
+      extra++;
+      const keyValues: Record<string, string> = {};
+      for (const c of cfg.keyColumns) keyValues[c] = (grp[0][c] ?? "").trim();
+      findings.push({
+        file, status: "Extra", key, keyValues,
+        ids: grp.map((r) => r[idCol]).filter(Boolean),
+      });
+    }
+    summary.push({ file, conformes, divergentes, faltando, extra });
+    totals.conformes += conformes;
+    totals.divergentes += divergentes;
+    totals.faltando += faltando;
+    totals.extra += extra;
+  }
+  return { findings, summary, totals };
+}
+
+// Filter rows that match any active visual rule (according to applyWhen).
+export function filterRowsByVisualRules(rows: Row[], rules: VisualRule[]): Row[] {
+  const active = rules.filter(
+    (r) => (r.keyColumns?.length ?? 0) > 0 && (r.compareColumns?.length ?? 0) > 0,
+  );
+  if (!active.length) return rows;
+  const matchingByRule = active.map((r) => ({
+    keyCols: r.keyColumns,
+    keys: computeMatchingKeys(r, rows),
+  }));
+  return rows.filter((r) =>
+    matchingByRule.some(({ keyCols, keys }) => keys.has(buildKey(keyCols, r))),
+  );
+}

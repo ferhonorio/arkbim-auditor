@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useArk } from "@/lib/store";
-import { applyFilters, runAudit, type AuditRule } from "@/lib/grouping";
+import { applyFilters, compareToConsolidated, runAudit, type AuditRule } from "@/lib/grouping";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,12 +28,17 @@ export function AuditoriaTab() {
   const filters = useArk((s) => s.filters);
   const rules = useArk((s) => s.auditRules);
   const setRules = useArk((s) => s.setAuditRules);
+  const snapshot = useArk((s) => s.consolidatedSnapshot);
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
 
   const findings = useMemo(() => runAudit(filtered, rules), [filtered, rules]);
+  const consolidatedComp = useMemo(
+    () => (snapshot ? compareToConsolidated(filtered, snapshot) : null),
+    [filtered, snapshot],
+  );
 
   const ensureDefault = () => {
     if (rules.length) return;
@@ -95,6 +100,110 @@ export function AuditoriaTab() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border bg-card p-4">
+        <h3 className="text-sm font-semibold">Conformidade com a Lista Consolidada</h3>
+        {!snapshot && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Nenhuma lista oficial salva. Vá em <strong>Lista consolidada</strong>, configure
+            e clique em "Salvar como lista oficial" para habilitar a comparação.
+          </p>
+        )}
+        {snapshot && consolidatedComp && (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Lista oficial salva em {new Date(snapshot.savedAt).toLocaleString("pt-BR")} ·{" "}
+              {snapshot.reference.length} itens · chave [{snapshot.cfg.keyColumns.join(", ")}] · valida [
+              {snapshot.cfg.paramColumns.join(", ")}]
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+              <Stat label="Conformes" value={consolidatedComp.totals.conformes} />
+              <Stat label="Divergentes" value={consolidatedComp.totals.divergentes} tone="destructive" />
+              <Stat label="Faltando" value={consolidatedComp.totals.faltando} tone="warn" />
+              <Stat label="Extra" value={consolidatedComp.totals.extra} tone="info" />
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Arquivo</TableHead>
+                    <TableHead className="text-right">Conformes</TableHead>
+                    <TableHead className="text-right">Divergentes</TableHead>
+                    <TableHead className="text-right">Faltando</TableHead>
+                    <TableHead className="text-right">Extra</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {consolidatedComp.summary.map((s) => (
+                    <TableRow key={s.file}>
+                      <TableCell className="font-medium">{s.file}</TableCell>
+                      <TableCell className="text-right">{s.conformes}</TableCell>
+                      <TableCell className="text-right text-destructive">{s.divergentes}</TableCell>
+                      <TableCell className="text-right">{s.faltando}</TableCell>
+                      <TableCell className="text-right">{s.extra}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Arquivo</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Chave</TableHead>
+                    <TableHead>Coluna</TableHead>
+                    <TableHead>Esperado</TableHead>
+                    <TableHead>Encontrado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {consolidatedComp.findings.slice(0, 200).map((f, i) => (
+                    <TableRow
+                      key={i}
+                      className={
+                        f.status === "Divergente"
+                          ? "bg-destructive/5"
+                          : f.status === "Faltando"
+                            ? "bg-amber-50"
+                            : "bg-blue-50"
+                      }
+                    >
+                      <TableCell className="font-medium">{f.file}</TableCell>
+                      <TableCell>
+                        <Badge variant={f.status === "Divergente" ? "destructive" : "secondary"}>
+                          {f.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {Object.entries(f.keyValues)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(" | ")}
+                      </TableCell>
+                      <TableCell className="text-xs">{f.column ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{f.expected ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{f.found ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!consolidatedComp.findings.length && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        Tudo conforme com a Lista Consolidada.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+              {consolidatedComp.findings.length > 200 && (
+                <p className="p-2 text-[10px] text-muted-foreground">
+                  Mostrando 200 de {consolidatedComp.findings.length}.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="flex items-center justify-between rounded-lg border bg-card p-4">
         <div>
           <h3 className="text-sm font-semibold">Regras de auditoria BIM</h3>
@@ -313,6 +422,20 @@ function ColumnPicker({
           </SelectContent>
         </Select>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "destructive" | "warn" | "info" }) {
+  const cls =
+    tone === "destructive" ? "text-destructive"
+    : tone === "warn" ? "text-amber-600"
+    : tone === "info" ? "text-blue-600"
+    : "";
+  return (
+    <div className="rounded-md border bg-background p-2">
+      <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-xl font-semibold ${cls}`}>{value.toLocaleString("pt-BR")}</p>
     </div>
   );
 }

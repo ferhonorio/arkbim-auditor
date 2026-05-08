@@ -31,6 +31,9 @@ export function ConsolidadaTab() {
   const filters = useArk((s) => s.filters);
   const cfg = useArk((s) => s.consolidationConfig);
   const setCfg = useArk((s) => s.setConsolidationConfig);
+  const snapshot = useArk((s) => s.consolidatedSnapshot);
+  const saveSnapshot = useArk((s) => s.saveConsolidatedSnapshot);
+  const clearSnapshot = useArk((s) => s.clearConsolidatedSnapshot);
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
@@ -212,8 +215,39 @@ export function ConsolidadaTab() {
         </div>
 
         {ready && (
-          <div className="mt-4 flex justify-end">
-            <Button size="sm" onClick={exportConsolidated}>
+          <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+            {snapshot && (
+              <span className="mr-auto rounded-full border bg-secondary px-3 py-1 text-xs">
+                Lista oficial salva em{" "}
+                {new Date(snapshot.savedAt).toLocaleString("pt-BR")} ·{" "}
+                {snapshot.reference.length} itens
+              </span>
+            )}
+            {snapshot && (
+              <Button size="sm" variant="outline" onClick={() => {
+                if (window.confirm("Limpar lista oficial salva?")) {
+                  clearSnapshot();
+                  toast.success("Lista oficial removida");
+                }
+              }}>
+                Limpar lista oficial
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!result) return;
+                saveSnapshot({
+                  reference: result.reference,
+                  cfg: cfg as ConsolidationConfig,
+                  savedAt: Date.now(),
+                });
+                toast.success("Lista oficial salva. Auditoria e Diagnóstico irão comparar contra ela.");
+              }}
+            >
+              Salvar como lista oficial
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportConsolidated}>
               <Download className="mr-1 h-3.5 w-3.5" />
               Exportar XLSX consolidado
             </Button>

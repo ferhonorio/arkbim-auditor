@@ -5,8 +5,15 @@ import type {
   AuditRule,
   ConsolidationConfig,
   Filter,
+  ReferenceItem,
   VisualRule,
 } from "./grouping";
+
+export interface ConsolidatedSnapshot {
+  reference: ReferenceItem[];
+  cfg: ConsolidationConfig;
+  savedAt: number;
+}
 
 export interface SavedPreset<T> {
   id: string;
@@ -54,11 +61,18 @@ interface ArkState {
   pageSize: number;
   setPageSize: (n: number) => void;
 
+  onlyRuleMatches: boolean;
+  setOnlyRuleMatches: (b: boolean) => void;
+
   auditRules: AuditRule[];
   setAuditRules: (r: AuditRule[]) => void;
 
   consolidationConfig: Partial<ConsolidationConfig>;
   setConsolidationConfig: (c: Partial<ConsolidationConfig>) => void;
+
+  consolidatedSnapshot: ConsolidatedSnapshot | null;
+  saveConsolidatedSnapshot: (s: ConsolidatedSnapshot) => void;
+  clearConsolidatedSnapshot: () => void;
 
   // Saved presets
   filterPresets: SavedPreset<Filter[]>[];
@@ -108,6 +122,9 @@ export const useArk = create<ArkState>()(
       pageSize: 50,
       setPageSize: (pageSize) => set({ pageSize }),
 
+      onlyRuleMatches: false,
+      setOnlyRuleMatches: (onlyRuleMatches) => set({ onlyRuleMatches }),
+
       auditRules: [],
       setAuditRules: (auditRules) => set({ auditRules }),
 
@@ -118,6 +135,10 @@ export const useArk = create<ArkState>()(
       },
       setConsolidationConfig: (c) =>
         set((s) => ({ consolidationConfig: { ...s.consolidationConfig, ...c } })),
+
+      consolidatedSnapshot: null,
+      saveConsolidatedSnapshot: (snap) => set({ consolidatedSnapshot: snap }),
+      clearConsolidatedSnapshot: () => set({ consolidatedSnapshot: null }),
 
       filterPresets: [],
       rulePresets: [],
@@ -191,6 +212,8 @@ export const useArk = create<ArkState>()(
         pageSize: s.pageSize,
         auditRules: s.auditRules,
         consolidationConfig: s.consolidationConfig,
+        consolidatedSnapshot: s.consolidatedSnapshot,
+        onlyRuleMatches: s.onlyRuleMatches,
         filterPresets: s.filterPresets,
         rulePresets: s.rulePresets,
         groupingPresets: s.groupingPresets,

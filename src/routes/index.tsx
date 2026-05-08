@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
 import { FileUploader } from "@/components/ark/FileUploader";
 import { FiltersPanel } from "@/components/ark/FiltersPanel";
-import { ColumnsPanel } from "@/components/ark/ColumnsPanel";
+
 import { AnaliseTab } from "@/components/ark/AnaliseTab";
 import { AuditoriaTab } from "@/components/ark/AuditoriaTab";
 import { ConsolidadaTab } from "@/components/ark/ConsolidadaTab";
@@ -67,7 +67,6 @@ function Index() {
             </div>
             <FileUploader />
             <FiltersPanel />
-            <ColumnsPanel />
           </div>
         )}
       </aside>
@@ -85,18 +84,18 @@ function Index() {
           <Tabs defaultValue="analise">
             <TabsList>
               <TabsTrigger value="analise">Analise e agrupamento</TabsTrigger>
-              <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>
               <TabsTrigger value="consolidada">Lista consolidada</TabsTrigger>
+              <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>
               <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
             </TabsList>
             <TabsContent value="analise" className="mt-4">
               <AnaliseTab />
             </TabsContent>
-            <TabsContent value="auditoria" className="mt-4">
-              <AuditoriaTab />
-            </TabsContent>
             <TabsContent value="consolidada" className="mt-4">
               <ConsolidadaTab />
+            </TabsContent>
+            <TabsContent value="auditoria" className="mt-4">
+              <AuditoriaTab />
             </TabsContent>
             <TabsContent value="diagnostico" className="mt-4">
               <DiagnosticoTab />
