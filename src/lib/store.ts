@@ -343,6 +343,8 @@ export const useArk = create<ArkState>()(
         filterPresets: s.filterPresets,
         rulePresets: s.rulePresets,
         groupingPresets: s.groupingPresets,
+        componentLists: s.componentLists,
+        activeComponentListId: s.activeComponentListId,
       }),
     },
   ),
