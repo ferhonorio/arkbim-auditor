@@ -225,9 +225,88 @@ export function DiagnosticoTab() {
       </div>
 
       <div className="rounded-lg border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Logs ({logs.length})</h3>
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold">
+            Aplicação das regras visuais ({ruleReports.length})
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Como cada regra é avaliada nas linhas filtradas e quais
+            inconsistências entre arquivos foram detectadas.
+          </p>
+        </div>
+        <div className="space-y-3">
+          {ruleReports.map((rep) => (
+            <div key={rep.id} className="rounded-md border bg-background p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{rep.name}</span>
+                <Badge variant="outline" className="text-[10px]">
+                  Aplica quando: {rep.applyWhen === "inconsistent" ? "FALSA (divergem)" : "VERDADEIRA (iguais)"}
+                </Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  Chaves avaliadas: {rep.totalKeys}
+                </Badge>
+                <Badge variant={rep.matched > 0 ? "destructive" : "secondary"} className="text-[10px]">
+                  Aplicada em: {rep.matched}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  Inconsistências: {rep.inconsistencies.length}
+                </Badge>
+              </div>
+              {rep.inconsistencies.length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Chave</TableHead>
+                        <TableHead>Arquivos</TableHead>
+                        <TableHead>Coluna divergente · valores</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rep.inconsistencies.slice(0, 50).map((inc) => (
+                        <TableRow key={inc.key} className="bg-destructive/5 align-top">
+                          <TableCell className="text-xs">
+                            {Object.entries(inc.keyValues)
+                              .map(([k, v]) => `${k}: ${v}`)
+                              .join(" | ")}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="flex flex-wrap gap-1">
+                              {inc.files.map((f) => (
+                                <Badge key={f} variant="outline" className="text-[10px]">{f}</Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="space-y-0.5">
+                              {Object.entries(inc.diffByColumn).map(([col, vals]) => (
+                                <div key={col}>
+                                  <span className="font-medium">{col}:</span> {vals.join(" / ")}
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {rep.inconsistencies.length > 50 && (
+                    <p className="p-2 text-[10px] text-muted-foreground">
+                      Mostrando 50 de {rep.inconsistencies.length} inconsistências.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {!ruleReports.length && (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma regra cadastrada na aba Análise.
+            </p>
+          )}
+        </div>
+      </div>
+
             <p className="text-xs text-muted-foreground">
               Erros JS, promessas rejeitadas e console.error desta sessão.
             </p>
