@@ -100,6 +100,110 @@ export function AuditoriaTab() {
 
   return (
     <div className="space-y-4">
+      <div className="rounded-lg border bg-card p-4">
+        <h3 className="text-sm font-semibold">Conformidade com a Lista Consolidada</h3>
+        {!snapshot && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Nenhuma lista oficial salva. Vá em <strong>Lista consolidada</strong>, configure
+            e clique em "Salvar como lista oficial" para habilitar a comparação.
+          </p>
+        )}
+        {snapshot && consolidatedComp && (
+          <>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Lista oficial salva em {new Date(snapshot.savedAt).toLocaleString("pt-BR")} ·{" "}
+              {snapshot.reference.length} itens · chave [{snapshot.cfg.keyColumns.join(", ")}] · valida [
+              {snapshot.cfg.paramColumns.join(", ")}]
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+              <Stat label="Conformes" value={consolidatedComp.totals.conformes} />
+              <Stat label="Divergentes" value={consolidatedComp.totals.divergentes} tone="destructive" />
+              <Stat label="Faltando" value={consolidatedComp.totals.faltando} tone="warn" />
+              <Stat label="Extra" value={consolidatedComp.totals.extra} tone="info" />
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Arquivo</TableHead>
+                    <TableHead className="text-right">Conformes</TableHead>
+                    <TableHead className="text-right">Divergentes</TableHead>
+                    <TableHead className="text-right">Faltando</TableHead>
+                    <TableHead className="text-right">Extra</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {consolidatedComp.summary.map((s) => (
+                    <TableRow key={s.file}>
+                      <TableCell className="font-medium">{s.file}</TableCell>
+                      <TableCell className="text-right">{s.conformes}</TableCell>
+                      <TableCell className="text-right text-destructive">{s.divergentes}</TableCell>
+                      <TableCell className="text-right">{s.faltando}</TableCell>
+                      <TableCell className="text-right">{s.extra}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Arquivo</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Chave</TableHead>
+                    <TableHead>Coluna</TableHead>
+                    <TableHead>Esperado</TableHead>
+                    <TableHead>Encontrado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {consolidatedComp.findings.slice(0, 200).map((f, i) => (
+                    <TableRow
+                      key={i}
+                      className={
+                        f.status === "Divergente"
+                          ? "bg-destructive/5"
+                          : f.status === "Faltando"
+                            ? "bg-amber-50"
+                            : "bg-blue-50"
+                      }
+                    >
+                      <TableCell className="font-medium">{f.file}</TableCell>
+                      <TableCell>
+                        <Badge variant={f.status === "Divergente" ? "destructive" : "secondary"}>
+                          {f.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {Object.entries(f.keyValues)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(" | ")}
+                      </TableCell>
+                      <TableCell className="text-xs">{f.column ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{f.expected ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{f.found ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!consolidatedComp.findings.length && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        Tudo conforme com a Lista Consolidada.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+              {consolidatedComp.findings.length > 200 && (
+                <p className="p-2 text-[10px] text-muted-foreground">
+                  Mostrando 200 de {consolidatedComp.findings.length}.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="flex items-center justify-between rounded-lg border bg-card p-4">
         <div>
           <h3 className="text-sm font-semibold">Regras de auditoria BIM</h3>
