@@ -294,7 +294,7 @@ export function DiagnosticoTab() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold">{rep.name}</span>
                 <Badge variant="outline" className="text-[10px]">
-                  Aplica quando: {rep.applyWhen === "inconsistent" ? "FALSA (divergem)" : "VERDADEIRA (iguais)"}
+                  Pinta quando: {rep.applyWhen === "inconsistent" ? "houver divergência" : "tudo igual"}
                 </Badge>
                 <Badge variant="secondary" className="text-[10px]">
                   Chaves avaliadas: {rep.totalKeys}
