@@ -122,6 +122,9 @@ export const useArk = create<ArkState>()(
       pageSize: 50,
       setPageSize: (pageSize) => set({ pageSize }),
 
+      onlyRuleMatches: false,
+      setOnlyRuleMatches: (onlyRuleMatches) => set({ onlyRuleMatches }),
+
       auditRules: [],
       setAuditRules: (auditRules) => set({ auditRules }),
 
@@ -132,6 +135,10 @@ export const useArk = create<ArkState>()(
       },
       setConsolidationConfig: (c) =>
         set((s) => ({ consolidationConfig: { ...s.consolidationConfig, ...c } })),
+
+      consolidatedSnapshot: null,
+      saveConsolidatedSnapshot: (snap) => set({ consolidatedSnapshot: snap }),
+      clearConsolidatedSnapshot: () => set({ consolidatedSnapshot: null }),
 
       filterPresets: [],
       rulePresets: [],
