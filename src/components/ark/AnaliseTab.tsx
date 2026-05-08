@@ -106,6 +106,12 @@ export function AnaliseTab() {
     [visualRules, ruleFiltered],
   );
 
+  // Pre-compute full eval per rule for tooltips ("por quê?")
+  const evalsPerRule = useMemo(
+    () => visualRules.map((r) => evaluateRule(r, ruleFiltered)),
+    [visualRules, ruleFiltered],
+  );
+
   // Live diagnostics per rule for inline feedback
   const ruleStats = useMemo(
     () =>
@@ -580,14 +586,48 @@ export function AnaliseTab() {
             <TableBody>
               {pageGroups.map((g) => {
                 let bg: string | undefined;
+                let why: string | undefined;
                 for (let idx = 0; idx < visualRules.length; idx++) {
                   if (ruleMatchesGroup(visualRules[idx], g, badKeysPerRule[idx])) {
                     bg = visualRules[idx].color;
+                    // Build "por quê" explanation
+                    const rule = visualRules[idx];
+                    const evals = evalsPerRule[idx];
+                    const keyCols = rule.keyColumns ?? [];
+                    // Find first rawRow whose key is in matching set
+                    let matchedKey = "";
+                    for (const r of g.rawRows) {
+                      const k = keyCols.map((c) => (r[c] ?? "").trim()).join("\u0001");
+                      if (badKeysPerRule[idx].has(k)) { matchedKey = k; break; }
+                    }
+                    const ev = matchedKey ? evals.get(matchedKey) : undefined;
+                    if (ev) {
+                      const keyDesc = keyCols
+                        .map((c) => `${c}="${ev.keyValues[c] ?? ""}"`)
+                        .join(", ");
+                      const isInc = (rule.applyWhen ?? "inconsistent") === "inconsistent";
+                      const header = isInc
+                        ? `Regra "${rule.name ?? "#" + (idx + 1)}" — chave ${keyDesc}\n${ev.rowsCount} linhas em ${ev.files.length} arquivo(s): ${ev.files.join(", ")}`
+                        : `Regra "${rule.name ?? "#" + (idx + 1)}" — chave ${keyDesc}\n${ev.rowsCount} linhas, todos os parâmetros conferem.`;
+                      const diffs = Object.entries(ev.diffByColumn);
+                      const body = diffs.length
+                        ? "\nDivergências:\n" +
+                          diffs
+                            .map(([c, vals]) => `  • ${c}: ${vals.join(" | ")}`)
+                            .join("\n")
+                        : "";
+                      why = header + body + `\n\nObs.: esta linha tem qtd ${g.quantity}, mas a regra avalia TODAS as linhas brutas que compartilham a chave (não só este agrupamento).`;
+                    }
                     break;
                   }
                 }
                 return (
-                  <TableRow key={g.key} style={bg ? { background: bg } : undefined}>
+                  <TableRow
+                    key={g.key}
+                    style={bg ? { background: bg } : undefined}
+                    title={why}
+                    className={why ? "cursor-help" : undefined}
+                  >
                     {groupVisible.map((c) => (
                       <TableCell key={c}>{g.values[c]}</TableCell>
                     ))}
