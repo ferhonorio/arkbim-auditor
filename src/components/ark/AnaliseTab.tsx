@@ -4,10 +4,12 @@ import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
   computeInconsistentKeys,
+  filterRowsByVisualRules,
   groupRows,
   ruleMatchesGroup,
   type VisualRule,
 } from "@/lib/grouping";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -43,7 +45,8 @@ const STRATEGIES: { value: ConcatStrategy; label: string }[] = [
 export function AnaliseTab() {
   const dataset = useArk((s) => s.dataset);
   const filters = useArk((s) => s.filters);
-  const hiddenColumns = useArk((s) => s.hiddenColumns);
+  const onlyRuleMatches = useArk((s) => s.onlyRuleMatches);
+  const setOnlyRuleMatches = useArk((s) => s.setOnlyRuleMatches);
   const groupBy = useArk((s) => s.groupBy);
   const setGroupBy = useArk((s) => s.setGroupBy);
   const concatCols = useArk((s) => s.concatCols);
@@ -86,22 +89,27 @@ export function AnaliseTab() {
     );
   }, [filtered, searchValue, focusParam, cols]);
 
+  const ruleFiltered = useMemo(
+    () => (onlyRuleMatches ? filterRowsByVisualRules(searched, visualRules) : searched),
+    [searched, visualRules, onlyRuleMatches],
+  );
+
   const groups = useMemo(
-    () => groupRows(searched, groupBy, concatCols, concatStrategy),
-    [searched, groupBy, concatCols, concatStrategy],
+    () => groupRows(ruleFiltered, groupBy, concatCols, concatStrategy),
+    [ruleFiltered, groupBy, concatCols, concatStrategy],
   );
 
   // Pre-compute bad keys per rule (priority order)
   const badKeysPerRule = useMemo(
-    () => visualRules.map((r) => computeInconsistentKeys(r, searched)),
-    [visualRules, searched],
+    () => visualRules.map((r) => computeInconsistentKeys(r, ruleFiltered)),
+    [visualRules, ruleFiltered],
   );
 
   const start = page * pageSize;
   const pageGroups = groups.slice(start, start + pageSize);
   const totalPages = Math.max(1, Math.ceil(groups.length / pageSize));
 
-  const visibleCols = cols.filter((c) => !hiddenColumns.includes(c));
+  const visibleCols = cols;
   const groupVisible = groupBy.filter(
     (c) => !focusParam || c === focusParam || c === "Nome do arquivo",
   );
