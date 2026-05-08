@@ -3,7 +3,7 @@ import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as
 import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
-  evaluateRule,
+  evaluateRuleOnGroups,
   filterRowsByVisualRules,
   groupRows,
   ruleMatchesGroup,
@@ -99,11 +99,12 @@ export function AnaliseTab() {
     [ruleFiltered, groupBy, concatCols, concatStrategy],
   );
 
-  // Pre-compute rule evaluation on the SEARCHED base (not ruleFiltered) so the
-  // toggle "show only matches" doesn't change which keys count as comparable.
+  // Evaluate visual rules against the GROUPED rows that are currently visible.
+  // This guarantees: an item that appears alone in the displayed table is never
+  // flagged, even if the same key exists elsewhere in the raw data.
   const evalsPerRule = useMemo(
-    () => visualRules.map((r) => evaluateRule(r, searched)),
-    [visualRules, searched],
+    () => visualRules.map((r) => evaluateRuleOnGroups(r, groups)),
+    [visualRules, groups],
   );
 
   // Pre-compute matching keys per rule from the same base.
@@ -622,7 +623,7 @@ export function AnaliseTab() {
                       const header = isInc
                         ? `Regra "${rule.name ?? "#" + (idx + 1)}" — chave ${keyDesc}\n${ev.rowsCount} linhas em ${ev.files.length} arquivo(s): ${ev.files.join(", ")}`
                         : `Regra "${rule.name ?? "#" + (idx + 1)}" — chave ${keyDesc}\n${ev.rowsCount} linhas, todos os parâmetros conferem.`;
-                      const diffs = Object.entries(ev.diffByColumn);
+                      const diffs = Object.entries(ev.diffByColumn) as [string, string[]][];
                       const body = diffs.length
                         ? "\nDivergências:\n" +
                           diffs
