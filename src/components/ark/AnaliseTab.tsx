@@ -348,9 +348,17 @@ export function AnaliseTab() {
       {/* Grouping */}
       <Section
         title="Agrupamento"
-        subtitle={`${groups.length.toLocaleString("pt-BR")} grupos em ${searched.length.toLocaleString("pt-BR")} linhas filtradas.`}
+        subtitle={`${groups.length.toLocaleString("pt-BR")} grupos em ${ruleFiltered.length.toLocaleString("pt-BR")} linhas${onlyRuleMatches ? " (filtradas pelas regras)" : " filtradas"}.`}
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 rounded-md border bg-background px-2 py-1 text-xs">
+              <Switch
+                checked={onlyRuleMatches}
+                onCheckedChange={setOnlyRuleMatches}
+                disabled={!visualRules.length}
+              />
+              <span>Mostrar somente itens das regras visuais</span>
+            </label>
             <PresetMenu
               label="Agrupamento"
               presets={groupingPresets}
