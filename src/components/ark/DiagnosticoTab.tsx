@@ -39,6 +39,64 @@ export function DiagnosticoTab() {
     };
   }, []);
 
+  const filteredRows = useMemo(
+    () => (dataset ? applyFilters(dataset.rows, filters) : []),
+    [dataset, filters],
+  );
+
+  // For each visual rule, build an application report: keys evaluated,
+  // matched, files involved and inter-file divergences.
+  const ruleReports = useMemo(() => {
+    return visualRules.map((r) => {
+      const keyCols = r.keyColumns ?? [];
+      const cmpCols = r.compareColumns ?? [];
+      const applyWhen = r.applyWhen ?? "inconsistent";
+      if (!keyCols.length || !cmpCols.length) {
+        return {
+          id: r.id,
+          name: r.name ?? "(sem nome)",
+          applyWhen,
+          totalKeys: 0,
+          matched: 0,
+          inconsistencies: [] as Array<{
+            key: string;
+            keyValues: Record<string, string>;
+            files: string[];
+            diffByColumn: Record<string, string[]>;
+          }>,
+        };
+      }
+      const evals = evaluateRule(r, filteredRows);
+      const inconsistencies: Array<{
+        key: string;
+        keyValues: Record<string, string>;
+        files: string[];
+        diffByColumn: Record<string, string[]>;
+      }> = [];
+      let matched = 0;
+      for (const [k, ev] of evals) {
+        const isMatch = applyWhen === "inconsistent" ? ev.inconsistent : !ev.inconsistent;
+        if (isMatch) matched++;
+        if (ev.inconsistent) {
+          inconsistencies.push({
+            key: k,
+            keyValues: ev.keyValues,
+            files: ev.files,
+            diffByColumn: ev.diffByColumn,
+          });
+        }
+      }
+      return {
+        id: r.id,
+        name: r.name ?? "(sem nome)",
+        applyWhen,
+        totalKeys: evals.size,
+        matched,
+        inconsistencies,
+      };
+    });
+  }, [visualRules, filteredRows]);
+
   const ruleStatus = visualRules.map((r) => {
     const hasNew = Array.isArray(r.keyColumns) && Array.isArray(r.compareColumns);
     return {
