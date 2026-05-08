@@ -115,12 +115,73 @@ export function groupRows(
 // have a single distinct value across all rows sharing that key. If any
 // compareColumn diverges, the key is "inconsistent" and groups whose rawRows
 // fall under that key get highlighted.
+export type VisualRuleApplyWhen = "inconsistent" | "consistent";
+
 export interface VisualRule {
   id: string;
   name?: string;
   keyColumns: string[]; // parametro(s) comum(ns) usados como chave
   compareColumns: string[]; // parametros que devem ser iguais para a mesma chave
   color: string;
+  // "inconsistent" (default): pinta quando a comparacao FALHA (valores divergem)
+  // "consistent": pinta quando a comparacao PASSA (valores iguais)
+  applyWhen?: VisualRuleApplyWhen;
+}
+
+// Returns map of key -> { inconsistent: boolean; files: string[]; rows: Row[] }
+export interface RuleKeyEval {
+  inconsistent: boolean;
+  files: string[];
+  rowsCount: number;
+  diffByColumn: Record<string, string[]>;
+  keyValues: Record<string, string>;
+}
+
+export function evaluateRule(
+  rule: VisualRule,
+  rows: Row[],
+  fileColumn = "Nome do arquivo",
+): Map<string, RuleKeyEval> {
+  const out = new Map<string, RuleKeyEval>();
+  const keyCols = rule.keyColumns ?? [];
+  const cmpCols = rule.compareColumns ?? [];
+  if (!keyCols.length || !cmpCols.length) return out;
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const k = buildKey(keyCols, r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  }
+  for (const [k, grp] of groups) {
+    const diffByColumn: Record<string, string[]> = {};
+    let inconsistent = false;
+    for (const c of cmpCols) {
+      const set = new Set<string>();
+      for (const r of grp) {
+        const v = (r[c] ?? "").trim();
+        if (v) set.add(v);
+      }
+      if (set.size > 1) {
+        inconsistent = true;
+        diffByColumn[c] = Array.from(set);
+      }
+    }
+    const filesSet = new Set<string>();
+    for (const r of grp) {
+      const f = (r[fileColumn] ?? "").trim();
+      if (f) filesSet.add(f);
+    }
+    const keyValues: Record<string, string> = {};
+    for (const c of keyCols) keyValues[c] = (grp[0][c] ?? "").trim();
+    out.set(k, {
+      inconsistent,
+      files: Array.from(filesSet),
+      rowsCount: grp.length,
+      diffByColumn,
+      keyValues,
+    });
+  }
+  return out;
 }
 
 // Legacy shape support
@@ -140,44 +201,33 @@ export function normalizeRule(r: VisualRule | LegacyVisualRule): VisualRule {
   return anyR;
 }
 
-export function computeInconsistentKeys(rule: VisualRule, rows: Row[]): Set<string> {
-  const bad = new Set<string>();
-  const keyCols = rule.keyColumns ?? [];
-  const cmpCols = rule.compareColumns ?? [];
-  if (!keyCols.length || !cmpCols.length) return bad;
-  const groups = new Map<string, Row[]>();
-  for (const r of rows) {
-    const k = buildKey(keyCols, r);
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k)!.push(r);
+// Returns set of keys that "match" the rule for highlighting purposes.
+// When applyWhen === "consistent", returns keys that are consistent (no diffs).
+// When applyWhen === "inconsistent" (default), returns keys with diffs.
+export function computeMatchingKeys(rule: VisualRule, rows: Row[]): Set<string> {
+  const out = new Set<string>();
+  const evals = evaluateRule(rule, rows);
+  const wantInconsistent = (rule.applyWhen ?? "inconsistent") === "inconsistent";
+  for (const [k, ev] of evals) {
+    if (wantInconsistent ? ev.inconsistent : !ev.inconsistent) out.add(k);
   }
-  for (const [k, grp] of groups) {
-    for (const c of cmpCols) {
-      const set = new Set<string>();
-      for (const r of grp) {
-        const v = (r[c] ?? "").trim().toLowerCase();
-        if (v) set.add(v);
-      }
-      if (set.size > 1) {
-        bad.add(k);
-        break;
-      }
-    }
-  }
-  return bad;
+  return out;
 }
+
+// Backwards-compatible alias
+export const computeInconsistentKeys = computeMatchingKeys;
 
 export function ruleMatchesGroup(
   rule: VisualRule,
   g: GroupedRow,
-  badKeys: Set<string>,
+  matchingKeys: Set<string>,
 ): boolean {
   const keyCols = rule.keyColumns ?? [];
   const cmpCols = rule.compareColumns ?? [];
   if (!keyCols.length || !cmpCols.length) return false;
   for (const r of g.rawRows) {
     const k = buildKey(keyCols, r);
-    if (badKeys.has(k)) return true;
+    if (matchingKeys.has(k)) return true;
   }
   return false;
 }
@@ -386,9 +436,16 @@ export interface AuditFinding {
   inconsistentColumn: string;
   values: string[];
   ids: string[];
+  files: string[]; // arquivos onde a inconsistencia ocorre
+  valuesByFile: Record<string, string[]>; // file -> distinct values
 }
 
-export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFinding[] {
+export function runAudit(
+  rows: Row[],
+  rules: AuditRule[],
+  idCol = "ID",
+  fileColumn = "Nome do arquivo",
+): AuditFinding[] {
   const findings: AuditFinding[] = [];
   for (const rule of rules) {
     if (!rule.groupBy.length || !rule.compareCols.length) continue;
@@ -408,6 +465,14 @@ export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFi
         if (distinct.size > 1) {
           const groupValues: Record<string, string> = {};
           for (const k of rule.groupBy) groupValues[k] = (grp[0][k] ?? "").trim();
+          const valuesByFile: Record<string, string[]> = {};
+          for (const r of grp) {
+            const f = (r[fileColumn] ?? "").trim() || "(sem arquivo)";
+            const v = (r[c] ?? "").trim();
+            if (!v) continue;
+            if (!valuesByFile[f]) valuesByFile[f] = [];
+            if (!valuesByFile[f].includes(v)) valuesByFile[f].push(v);
+          }
           findings.push({
             ruleId: rule.id,
             ruleName: rule.name,
@@ -416,6 +481,8 @@ export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFi
             inconsistentColumn: c,
             values: Array.from(distinct),
             ids: grp.map((r) => r[idCol]).filter(Boolean),
+            files: Object.keys(valuesByFile),
+            valuesByFile,
           });
         }
       }
@@ -423,3 +490,4 @@ export function runAudit(rows: Row[], rules: AuditRule[], idCol = "ID"): AuditFi
   }
   return findings;
 }
+

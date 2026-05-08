@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useArk } from "@/lib/store";
 import {
   RULES_SCHEMA_VERSION,
@@ -8,6 +8,7 @@ import {
   subscribeLogs,
   type DiagLog,
 } from "@/lib/diagnostics";
+import { applyFilters, evaluateRule } from "@/lib/grouping";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,6 +38,64 @@ export function DiagnosticoTab() {
       unsub();
     };
   }, []);
+
+  const filteredRows = useMemo(
+    () => (dataset ? applyFilters(dataset.rows, filters) : []),
+    [dataset, filters],
+  );
+
+  // For each visual rule, build an application report: keys evaluated,
+  // matched, files involved and inter-file divergences.
+  const ruleReports = useMemo(() => {
+    return visualRules.map((r) => {
+      const keyCols = r.keyColumns ?? [];
+      const cmpCols = r.compareColumns ?? [];
+      const applyWhen = r.applyWhen ?? "inconsistent";
+      if (!keyCols.length || !cmpCols.length) {
+        return {
+          id: r.id,
+          name: r.name ?? "(sem nome)",
+          applyWhen,
+          totalKeys: 0,
+          matched: 0,
+          inconsistencies: [] as Array<{
+            key: string;
+            keyValues: Record<string, string>;
+            files: string[];
+            diffByColumn: Record<string, string[]>;
+          }>,
+        };
+      }
+      const evals = evaluateRule(r, filteredRows);
+      const inconsistencies: Array<{
+        key: string;
+        keyValues: Record<string, string>;
+        files: string[];
+        diffByColumn: Record<string, string[]>;
+      }> = [];
+      let matched = 0;
+      for (const [k, ev] of evals) {
+        const isMatch = applyWhen === "inconsistent" ? ev.inconsistent : !ev.inconsistent;
+        if (isMatch) matched++;
+        if (ev.inconsistent) {
+          inconsistencies.push({
+            key: k,
+            keyValues: ev.keyValues,
+            files: ev.files,
+            diffByColumn: ev.diffByColumn,
+          });
+        }
+      }
+      return {
+        id: r.id,
+        name: r.name ?? "(sem nome)",
+        applyWhen,
+        totalKeys: evals.size,
+        matched,
+        inconsistencies,
+      };
+    });
+  }, [visualRules, filteredRows]);
 
   const ruleStatus = visualRules.map((r) => {
     const hasNew = Array.isArray(r.keyColumns) && Array.isArray(r.compareColumns);
@@ -162,6 +221,89 @@ export function DiagnosticoTab() {
               )}
             </TableBody>
           </Table>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-card p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold">
+            Aplicação das regras visuais ({ruleReports.length})
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Como cada regra é avaliada nas linhas filtradas e quais
+            inconsistências entre arquivos foram detectadas.
+          </p>
+        </div>
+        <div className="space-y-3">
+          {ruleReports.map((rep) => (
+            <div key={rep.id} className="rounded-md border bg-background p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{rep.name}</span>
+                <Badge variant="outline" className="text-[10px]">
+                  Aplica quando: {rep.applyWhen === "inconsistent" ? "FALSA (divergem)" : "VERDADEIRA (iguais)"}
+                </Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  Chaves avaliadas: {rep.totalKeys}
+                </Badge>
+                <Badge variant={rep.matched > 0 ? "destructive" : "secondary"} className="text-[10px]">
+                  Aplicada em: {rep.matched}
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  Inconsistências: {rep.inconsistencies.length}
+                </Badge>
+              </div>
+              {rep.inconsistencies.length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Chave</TableHead>
+                        <TableHead>Arquivos</TableHead>
+                        <TableHead>Coluna divergente · valores</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {rep.inconsistencies.slice(0, 50).map((inc) => (
+                        <TableRow key={inc.key} className="bg-destructive/5 align-top">
+                          <TableCell className="text-xs">
+                            {Object.entries(inc.keyValues)
+                              .map(([k, v]) => `${k}: ${v}`)
+                              .join(" | ")}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="flex flex-wrap gap-1">
+                              {inc.files.map((f) => (
+                                <Badge key={f} variant="outline" className="text-[10px]">{f}</Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="space-y-0.5">
+                              {Object.entries(inc.diffByColumn).map(([col, vals]) => (
+                                <div key={col}>
+                                  <span className="font-medium">{col}:</span> {vals.join(" / ")}
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {rep.inconsistencies.length > 50 && (
+                    <p className="p-2 text-[10px] text-muted-foreground">
+                      Mostrando 50 de {rep.inconsistencies.length} inconsistências.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {!ruleReports.length && (
+            <p className="text-xs text-muted-foreground">
+              Nenhuma regra cadastrada na aba Análise.
+            </p>
+          )}
         </div>
       </div>
 
