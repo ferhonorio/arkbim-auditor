@@ -8,8 +8,12 @@ import type {
   ReferenceItem,
   VisualRule,
 } from "./grouping";
-import type { ComponentList, ConsolidationMode } from "./component-lists";
-import { consolidateRows } from "./component-lists";
+import type {
+  ComponentList,
+  ConsolidationMode,
+  ConsolidatePlan,
+} from "./component-lists";
+import { commitConsolidation, planConsolidation } from "./component-lists";
 
 export interface ConsolidatedSnapshot {
   reference: ReferenceItem[];
@@ -86,10 +90,13 @@ interface ArkState {
   deleteComponentList: (id: string) => void;
   updateComponentList: (id: string, patch: Partial<ComponentList>) => void;
   setColumnAlias: (id: string, column: string, alias: string) => void;
-  consolidateIntoList: (id: string, mode: ConsolidationMode) => {
-    added: number; updated: number; unchanged: number; newFiles: string[];
-  } | null;
+  applyConsolidation: (
+    id: string,
+    plan: ConsolidatePlan,
+    mode: ConsolidationMode,
+  ) => { added: number; updated: number; skipped: number; newFiles: string[] } | null;
   removeListItem: (id: string, key: string) => void;
+  clearListItems: (id: string) => void;
 
   // Saved presets
   filterPresets: SavedPreset<Filter[]>[];
@@ -165,11 +172,7 @@ export const useArk = create<ArkState>()(
         const now = Date.now();
         const list: ComponentList = {
           id,
-          name: name.trim() || "Nova lista",
-          filters: [],
-          excludeFilters: [],
-          keyColumns: ["Type Mark"],
-          paramColumns: [],
+          name: name.trim() || "Nova categoria",
           fileColumn: "Nome do arquivo",
           idCol: "ID",
           columnAliases: {},
@@ -230,12 +233,11 @@ export const useArk = create<ArkState>()(
             return { ...l, columnAliases: aliases, updatedAt: Date.now() };
           }),
         })),
-      consolidateIntoList: (id, mode) => {
+      applyConsolidation: (id, plan, mode) => {
         const state = get();
         const list = state.componentLists.find((l) => l.id === id);
-        const ds = state.dataset;
-        if (!list || !ds) return null;
-        const outcome = consolidateRows(ds.rows, list, mode);
+        if (!list) return null;
+        const outcome = commitConsolidation(list, plan, mode);
         const sourceFiles = Array.from(
           new Set([...list.sourceFiles, ...outcome.newFiles]),
         );
@@ -249,7 +251,7 @@ export const useArk = create<ArkState>()(
         return {
           added: outcome.added,
           updated: outcome.updated,
-          unchanged: outcome.unchanged,
+          skipped: outcome.skipped,
           newFiles: outcome.newFiles,
         };
       },
@@ -262,6 +264,14 @@ export const useArk = create<ArkState>()(
                   items: l.items.filter((i) => i.key !== key),
                   updatedAt: Date.now(),
                 }
+              : l,
+          ),
+        })),
+      clearListItems: (id) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id === id
+              ? { ...l, items: [], sourceFiles: [], updatedAt: Date.now() }
               : l,
           ),
         })),
