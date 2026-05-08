@@ -425,3 +425,17 @@ function ColumnPicker({
     </div>
   );
 }
+
+function Stat({ label, value, tone }: { label: string; value: number; tone?: "destructive" | "warn" | "info" }) {
+  const cls =
+    tone === "destructive" ? "text-destructive"
+    : tone === "warn" ? "text-amber-600"
+    : tone === "info" ? "text-blue-600"
+    : "";
+  return (
+    <div className="rounded-md border bg-background p-2">
+      <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-xl font-semibold ${cls}`}>{value.toLocaleString("pt-BR")}</p>
+    </div>
+  );
+}
