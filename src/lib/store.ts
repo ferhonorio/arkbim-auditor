@@ -8,6 +8,8 @@ import type {
   ReferenceItem,
   VisualRule,
 } from "./grouping";
+import type { ComponentList, ConsolidationMode } from "./component-lists";
+import { consolidateRows } from "./component-lists";
 
 export interface ConsolidatedSnapshot {
   reference: ReferenceItem[];
