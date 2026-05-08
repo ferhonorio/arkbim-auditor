@@ -157,6 +157,115 @@ export const useArk = create<ArkState>()(
       saveConsolidatedSnapshot: (snap) => set({ consolidatedSnapshot: snap }),
       clearConsolidatedSnapshot: () => set({ consolidatedSnapshot: null }),
 
+      componentLists: [],
+      activeComponentListId: null,
+      setActiveComponentList: (id) => set({ activeComponentListId: id }),
+      createComponentList: (name) => {
+        const id = crypto.randomUUID();
+        const now = Date.now();
+        const list: ComponentList = {
+          id,
+          name: name.trim() || "Nova lista",
+          filters: [],
+          excludeFilters: [],
+          keyColumns: ["Type Mark"],
+          paramColumns: [],
+          fileColumn: "Nome do arquivo",
+          idCol: "ID",
+          columnAliases: {},
+          items: [],
+          sourceFiles: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((s) => ({
+          componentLists: [...s.componentLists, list],
+          activeComponentListId: id,
+        }));
+        return id;
+      },
+      duplicateComponentList: (id) => {
+        const src = get().componentLists.find((l) => l.id === id);
+        if (!src) return null;
+        const newId = crypto.randomUUID();
+        const now = Date.now();
+        const copy: ComponentList = {
+          ...src,
+          id: newId,
+          name: `${src.name} (cópia)`,
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((s) => ({
+          componentLists: [...s.componentLists, copy],
+          activeComponentListId: newId,
+        }));
+        return newId;
+      },
+      renameComponentList: (id, name) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id === id ? { ...l, name, updatedAt: Date.now() } : l,
+          ),
+        })),
+      deleteComponentList: (id) =>
+        set((s) => ({
+          componentLists: s.componentLists.filter((l) => l.id !== id),
+          activeComponentListId:
+            s.activeComponentListId === id ? null : s.activeComponentListId,
+        })),
+      updateComponentList: (id, patch) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id === id ? { ...l, ...patch, updatedAt: Date.now() } : l,
+          ),
+        })),
+      setColumnAlias: (id, column, alias) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            const aliases = { ...l.columnAliases };
+            if (alias.trim()) aliases[column] = alias.trim();
+            else delete aliases[column];
+            return { ...l, columnAliases: aliases, updatedAt: Date.now() };
+          }),
+        })),
+      consolidateIntoList: (id, mode) => {
+        const state = get();
+        const list = state.componentLists.find((l) => l.id === id);
+        const ds = state.dataset;
+        if (!list || !ds) return null;
+        const outcome = consolidateRows(ds.rows, list, mode);
+        const sourceFiles = Array.from(
+          new Set([...list.sourceFiles, ...outcome.newFiles]),
+        );
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id === id
+              ? { ...l, items: outcome.items, sourceFiles, updatedAt: Date.now() }
+              : l,
+          ),
+        }));
+        return {
+          added: outcome.added,
+          updated: outcome.updated,
+          unchanged: outcome.unchanged,
+          newFiles: outcome.newFiles,
+        };
+      },
+      removeListItem: (id, key) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id === id
+              ? {
+                  ...l,
+                  items: l.items.filter((i) => i.key !== key),
+                  updatedAt: Date.now(),
+                }
+              : l,
+          ),
+        })),
+
       filterPresets: [],
       rulePresets: [],
       groupingPresets: [],
