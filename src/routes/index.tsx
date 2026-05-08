@@ -87,6 +87,7 @@ function Index() {
               <TabsTrigger value="analise">Analise e agrupamento</TabsTrigger>
               <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>
               <TabsTrigger value="consolidada">Lista consolidada</TabsTrigger>
+              <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>
             </TabsList>
             <TabsContent value="analise" className="mt-4">
               <AnaliseTab />
@@ -96,6 +97,9 @@ function Index() {
             </TabsContent>
             <TabsContent value="consolidada" className="mt-4">
               <ConsolidadaTab />
+            </TabsContent>
+            <TabsContent value="diagnostico" className="mt-4">
+              <DiagnosticoTab />
             </TabsContent>
           </Tabs>
         </div>
