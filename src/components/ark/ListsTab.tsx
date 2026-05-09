@@ -10,6 +10,8 @@ import {
   Undo2,
   Map as MapIcon,
   Presentation,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
