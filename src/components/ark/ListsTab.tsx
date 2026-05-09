@@ -44,7 +44,7 @@ const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
 const QTY_COL_WIDTH = 100;
 
-export function ListsTab() {
+export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
   const lists = useArk((s) => s.componentLists);
   const activeId = useArk((s) => s.activeComponentListId);
   const setActive = useArk((s) => s.setActiveComponentList);
