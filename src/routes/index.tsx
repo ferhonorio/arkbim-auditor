@@ -21,6 +21,9 @@ import { useCloudSync } from "@/lib/cloud-sync";
 import { usePermissions } from "@/lib/permissions";
 import { UsersPanel } from "@/components/admin/UsersPanel";
 import { FloorView } from "@/components/ark/FloorView";
+import { CommentsCenter } from "@/components/ark/lists/CommentsCenter";
+import { useProjectName } from "@/lib/project-settings";
+import { useArk } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
