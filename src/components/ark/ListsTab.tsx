@@ -578,14 +578,20 @@ function CategoryView({
                       </td>
                       <td className="p-1">
                         <div className="flex items-center justify-end gap-0.5">
-                          {canComment && (
-                            <ItemCommentsPopover
-                              listId={list.id}
-                              itemKey={i.key}
-                              canComment={canComment}
-                              canModerate={!readOnly}
-                            />
-                          )}
+                          {canComment && (() => {
+                            const sum = commentSummaries.get(i.key);
+                            return (
+                              <ItemCommentsPopover
+                                listId={list.id}
+                                itemKey={i.key}
+                                canComment={canComment}
+                                canModerate={!readOnly}
+                                initialOpenCount={sum?.count ?? 0}
+                                lastAuthorName={sum?.lastAuthorName ?? null}
+                                lastAuthorLabel={sum?.lastAuthorLabel ?? null}
+                              />
+                            );
+                          })()}
                           {!readOnly && (
                             <Button
                               size="icon"
