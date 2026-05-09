@@ -350,3 +350,30 @@ export function migrateComponentList(l: Partial<ComponentList> & { id: string; n
     lastSnapshot: l.lastSnapshot,
   };
 }
+
+/** Re-apply floor aliases to a list's existing items.occurrences (merging entries that collapse). */
+export function applyFloorAliasesToItems(items: ConsolidatedItem[], aliases: Record<string, string>): ConsolidatedItem[] {
+  return items.map((i) => {
+    const map = new Map<string, FileOccurrence>();
+    for (const o of i.occurrences) {
+      const floor = aliases[o.floor] || o.floor;
+      const k = `${floor}\u0001${o.file}`;
+      const prev = map.get(k);
+      if (prev) {
+        prev.quantity = Math.round((prev.quantity + o.quantity) * 1000) / 1000;
+        prev.ids = Array.from(new Set([...prev.ids, ...o.ids]));
+      } else {
+        map.set(k, { floor, file: o.file, quantity: o.quantity, ids: [...o.ids] });
+      }
+    }
+    const occurrences = Array.from(map.values()).sort(
+      (a, b) => a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
+    );
+    return {
+      ...i,
+      occurrences,
+      totalQuantity: Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
+    };
+  });
+}
+
