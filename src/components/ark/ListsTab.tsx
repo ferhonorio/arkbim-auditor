@@ -88,13 +88,17 @@ export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
       <aside className="flex w-64 shrink-0 flex-col gap-2 rounded-lg border bg-card p-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Categorias</h3>
-          <Button size="sm" variant="outline" onClick={handleCreate}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> Nova
-          </Button>
+          {!readOnly && (
+            <Button size="sm" variant="outline" onClick={handleCreate}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> Nova
+            </Button>
+          )}
         </div>
         {lists.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Nenhuma categoria ainda. Crie uma e consolide dados pela aba Análise.
+            {readOnly
+              ? "Nenhuma categoria disponível."
+              : "Nenhuma categoria ainda. Crie uma e consolide dados pela aba Análise."}
           </p>
         )}
         <div className="flex-1 space-y-1 overflow-auto">
