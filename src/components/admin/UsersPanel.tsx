@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { Check, X, RefreshCw, KeyRound, Copy } from "lucide-react";
 import { handleSupabaseError } from "@/lib/error-handling";
+import { useProjectName, setProjectName as saveProjectName } from "@/lib/project-settings";
 
 type AssignableRole = "coordenador" | "comentador";
 
@@ -60,6 +61,22 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
   const [resetting, setResetting] = useState(false);
+  const { projectName, refresh: refreshProjectName } = useProjectName();
+  const [projectDraft, setProjectDraft] = useState("");
+  const [savingProject, setSavingProject] = useState(false);
+  useEffect(() => { setProjectDraft(projectName); }, [projectName]);
+  const onSaveProject = async () => {
+    setSavingProject(true);
+    try {
+      await saveProjectName(projectDraft, currentUserId);
+      await refreshProjectName();
+      toast.success("Nome do projeto salvo");
+    } catch (e) {
+      handleSupabaseError(e as { message?: string }, "save");
+    } finally {
+      setSavingProject(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,6 +173,28 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`mr-2 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
         </Button>
+      </div>
+
+      <div className="rounded-lg border bg-card p-3">
+        <div className="mb-1 text-sm font-medium">Nome do projeto</div>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Aparece no cabeçalho dos visualizadores e comentadores e nos links públicos.
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            value={projectDraft}
+            onChange={(e) => setProjectDraft(e.target.value)}
+            placeholder="Ex.: Edifício Residencial Aurora"
+            className="h-8 max-w-md text-xs"
+          />
+          <Button
+            size="sm"
+            onClick={onSaveProject}
+            disabled={savingProject || projectDraft.trim() === projectName.trim()}
+          >
+            Salvar
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border">

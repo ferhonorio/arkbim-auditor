@@ -20,6 +20,7 @@ interface RpcResult {
   ok: boolean;
   reason?: string;
   scope?: "all" | "category";
+  project_name?: string | null;
   lists?: { id: string; name: string; data: unknown; updated_at: string }[];
 }
 
@@ -28,6 +29,7 @@ function SharePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lists, setLists] = useState<ComponentList[]>([]);
+  const [projectName, setProjectName] = useState<string>("ArkBIM");
 
   useEffect(() => {
     let alive = true;
@@ -53,6 +55,7 @@ function SharePage() {
         return migrateComponentList({ ...raw, id: row.id, name: row.name });
       });
       setLists(parsed);
+      setProjectName((res.project_name ?? "").trim() || "ArkBIM");
       setLoading(false);
     })();
     return () => {
@@ -88,7 +91,7 @@ function SharePage() {
             AB
           </div>
           <div>
-            <p className="text-sm font-semibold leading-tight">ArkBIM</p>
+            <p className="text-sm font-semibold leading-tight">{projectName}</p>
             <p className="text-xs text-muted-foreground">
               Visualização pública · somente leitura
             </p>
