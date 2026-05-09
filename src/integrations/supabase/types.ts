@@ -50,6 +50,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          status: string
           updated_at: string
         }
         Insert: {
@@ -57,6 +58,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id: string
+          status?: string
           updated_at?: string
         }
         Update: {
@@ -64,6 +66,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -94,6 +97,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_comment: { Args: { _uid: string }; Returns: boolean }
+      can_edit_lists: { Args: { _uid: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -101,6 +106,8 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_approved: { Args: { _uid: string }; Returns: boolean }
+      is_master: { Args: { _uid: string }; Returns: boolean }
     }
     Enums: {
       app_role:
