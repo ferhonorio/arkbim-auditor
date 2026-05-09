@@ -20,6 +20,10 @@ interface Props {
   open: boolean;
   onOpenChange: (b: boolean) => void;
   rule: VisualRule;
+  /** Rows already filtered (filtros + agrupamento). Defaults to full dataset. */
+  rows?: Row[];
+  /** Optional label describing active scope (filters/grouping) for context. */
+  scopeLabel?: string;
 }
 
 interface Variant {
