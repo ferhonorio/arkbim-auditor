@@ -813,6 +813,18 @@ export function AnaliseTab() {
           </div>
         )}
       </Section>
+
+      {resolveRuleId && (() => {
+        const rule = visualRules.find((r) => r.id === resolveRuleId);
+        if (!rule) return null;
+        return (
+          <ResolveInconsistenciesDialog
+            open={!!resolveRuleId}
+            onOpenChange={(b) => !b && setResolveRuleId(null)}
+            rule={rule}
+          />
+        );
+      })()}
     </div>
   );
 }
