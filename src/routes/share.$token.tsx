@@ -91,7 +91,7 @@ function SharePage() {
             AB
           </div>
           <div>
-            <p className="text-sm font-semibold leading-tight">ArkBIM</p>
+            <p className="text-sm font-semibold leading-tight">{projectName}</p>
             <p className="text-xs text-muted-foreground">
               Visualização pública · somente leitura
             </p>
