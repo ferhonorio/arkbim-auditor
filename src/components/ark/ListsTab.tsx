@@ -304,7 +304,14 @@ function CategoryView({
           <Button
             size="sm"
             variant="outline"
-            onClick={onUndo}
+            onClick={() => setPresentationMode(true)}
+          >
+            <Presentation className="mr-1 h-3.5 w-3.5" /> Modo apresentação
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmUndo(true)}
             disabled={!list.lastSnapshot}
             title={
               list.lastSnapshot
