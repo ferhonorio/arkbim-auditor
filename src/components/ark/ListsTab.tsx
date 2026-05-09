@@ -177,6 +177,7 @@ export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
 function CategoryView({
   list,
   allLists,
+  readOnly,
   onPresent,
   onRename,
   onDelete,
@@ -190,6 +191,7 @@ function CategoryView({
 }: {
   list: ComponentList;
   allLists: ComponentList[];
+  readOnly: boolean;
   onPresent: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
