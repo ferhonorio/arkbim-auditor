@@ -171,7 +171,7 @@ function Index() {
               </TabsContent>
             )}
             <TabsContent value="consolidada" className="mt-4">
-              <ListsTab readOnly={!canEdit} />
+              <ListsTab readOnly={!canEdit} canComment={perms.canComment} />
             </TabsContent>
             {canEdit && (
               <TabsContent value="auditoria" className="mt-4">
