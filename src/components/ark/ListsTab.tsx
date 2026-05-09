@@ -137,6 +137,7 @@ export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
           <CategoryView
             list={active}
             allLists={lists}
+            readOnly={readOnly}
             onPresent={() => setPresentation(true)}
             onRename={(name) => renameList(active.id, name)}
             onDelete={() => {
