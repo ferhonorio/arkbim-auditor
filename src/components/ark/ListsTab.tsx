@@ -144,6 +144,7 @@ export function ListsTab({
             list={active}
             allLists={lists}
             readOnly={readOnly}
+            canComment={canComment}
             onPresent={() => setPresentation(true)}
             onRename={(name) => renameList(active.id, name)}
             onDelete={() => {
@@ -184,6 +185,7 @@ function CategoryView({
   list,
   allLists,
   readOnly,
+  canComment,
   onPresent,
   onRename,
   onDelete,
@@ -198,6 +200,7 @@ function CategoryView({
   list: ComponentList;
   allLists: ComponentList[];
   readOnly: boolean;
+  canComment: boolean;
   onPresent: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
