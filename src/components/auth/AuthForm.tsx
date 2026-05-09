@@ -49,7 +49,7 @@ export function AuthForm() {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) return handleAuthError(error, "reset");
     toast.success("E-mail de recuperação enviado. Verifique sua caixa de entrada.");
     setForgotOpen(false);
   };
