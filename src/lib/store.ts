@@ -100,12 +100,13 @@ interface ArkState {
   componentLists: ComponentList[];
   activeComponentListId: string | null;
   setActiveComponentList: (id: string | null) => void;
-  createComponentList: (name: string) => string;
+  createComponentList: (opts: CreateListOpts | string) => string;
   duplicateComponentList: (id: string) => string | null;
   renameComponentList: (id: string, name: string) => void;
   deleteComponentList: (id: string) => void;
   updateComponentList: (id: string, patch: Partial<ComponentList>) => void;
   setColumnAlias: (id: string, column: string, alias: string) => void;
+  setColumnWidth: (id: string, column: string, width: number) => void;
   applyConsolidation: (
     id: string,
     plan: ConsolidatePlan,
@@ -113,6 +114,11 @@ interface ArkState {
   ) => { added: number; updated: number; skipped: number; newFiles: string[] } | null;
   removeListItem: (id: string, key: string) => void;
   clearListItems: (id: string) => void;
+
+  // Row selection (for consolidation)
+  selectedRowIds: string[];
+  setSelectedRowIds: (ids: string[]) => void;
+  clearSelectedRowIds: () => void;
 
   // Saved presets
   filterPresets: SavedPreset<Filter[]>[];
