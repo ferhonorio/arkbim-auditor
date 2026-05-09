@@ -276,12 +276,14 @@ function CategoryView({
   };
 
   const handleHeaderRename = (col: string) => {
-    if (col === list.keyColumn) {
-      toast.error("A coluna chave não pode ser renomeada");
-      return;
-    }
     const cur = list.columnAliases[col] || "";
-    const next = window.prompt(`Renomear coluna "${col}":`, cur);
+    const isKey = col === list.keyColumn;
+    const next = window.prompt(
+      isKey
+        ? `Renomear cabeçalho da coluna chave "${col}" (apenas máscara visual — o nome interno continua "${col}"):`
+        : `Renomear coluna "${col}":`,
+      cur,
+    );
     if (next === null) return;
     onSetAlias(col, next.trim());
   };
@@ -303,6 +305,7 @@ function CategoryView({
     if (!editing) return;
     onUpdateParam(editing.key, editing.col, editVal);
     setEditing(null);
+    toast.success("Atualizado");
   };
 
   const [confirmUndo, setConfirmUndo] = useState(false);
