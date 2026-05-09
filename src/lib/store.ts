@@ -189,15 +189,23 @@ export const useArk = create<ArkState>()(
       componentLists: [],
       activeComponentListId: null,
       setActiveComponentList: (id) => set({ activeComponentListId: id }),
-      createComponentList: (name) => {
+      createComponentList: (input) => {
+        const opts: CreateListOpts =
+          typeof input === "string" ? { name: input } : input;
         const id = crypto.randomUUID();
         const now = Date.now();
+        const fileColumn = opts.fileColumn || DEFAULT_FLOOR_COLUMN;
         const list: ComponentList = {
           id,
-          name: name.trim() || "Nova categoria",
-          fileColumn: "Nome do arquivo",
+          name: (opts.name || "").trim() || "Nova categoria",
+          fileColumn,
           idCol: "ID",
+          keyColumn: opts.keyColumn || DEFAULT_KEY_COLUMN,
+          floorColumn: opts.floorColumn || fileColumn,
+          measureMode: opts.measureMode || "count",
+          areaColumn: opts.areaColumn,
           columnAliases: {},
+          columnWidths: {},
           items: [],
           sourceFiles: [],
           createdAt: now,
