@@ -36,8 +36,7 @@ export function AuthForm() {
         toast.success("Bem-vindo de volta!");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha na autenticação";
-      toast.error(msg);
+      handleAuthError(err, tab === "signup" ? "signup" : "signin");
     } finally {
       setLoading(false);
     }
