@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as InfoIcon } from "lucide-react";
+import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as InfoIcon, ChevronDown } from "lucide-react";
 import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
