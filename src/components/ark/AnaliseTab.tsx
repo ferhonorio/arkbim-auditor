@@ -78,6 +78,11 @@ export function AnaliseTab() {
 
   const [page, setPage] = useState(0);
   const [selectedGroupKeys, setSelectedGroupKeys] = useState<Set<string>>(new Set());
+  const [resolveRuleId, setResolveRuleId] = useState<string | null>(null);
+
+  // Quick schema selectors next to "Consolidar"
+  const [quickKey, setQuickKey] = useState<string>("");
+  const [quickFloor, setQuickFloor] = useState<string>("");
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
