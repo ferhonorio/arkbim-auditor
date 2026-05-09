@@ -678,6 +678,18 @@ export function AnaliseTab() {
                     title={why}
                     className={why ? "cursor-help" : undefined}
                   >
+                    <TableCell className="p-1">
+                      <Checkbox
+                        checked={selectedGroupKeys.has(g.key)}
+                        onCheckedChange={(v) => {
+                          const next = new Set(selectedGroupKeys);
+                          if (v) next.add(g.key);
+                          else next.delete(g.key);
+                          setSelectedGroupKeys(next);
+                        }}
+                        aria-label="Selecionar"
+                      />
+                    </TableCell>
                     {groupVisible.map((c) => (
                       <TableCell key={c}>{g.values[c]}</TableCell>
                     ))}
