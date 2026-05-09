@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import {
   buildShareUrl,
   createShareLink,
+  formatShareUrlDisplay,
   listShareLinks,
   revokeShareLink,
   type ShareLinkRow,
@@ -127,7 +128,8 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
             {scope === "category" && listName ? ` — ${listName}` : " (todas as listas)"}
           </DialogTitle>
           <DialogDescription>
-            Gere um link público (somente leitura) para compartilhar com pessoas sem cadastro.
+            Gere um link público (somente leitura) no domínio <strong>edise.ld.arkbim.com</strong>.
+            Pessoas sem cadastro acessam direto pelo link.
           </DialogDescription>
         </DialogHeader>
 
@@ -177,7 +179,9 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                   className="flex items-center gap-2 rounded-md border p-2 text-xs"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-mono">{buildShareUrl(l.token)}</div>
+                    <div className="truncate font-mono" title={buildShareUrl(l.token)}>
+                      {formatShareUrlDisplay(l.token)}
+                    </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-2 text-muted-foreground">
                       {inactive ? (
                         <Badge variant="destructive" className="text-[10px]">
