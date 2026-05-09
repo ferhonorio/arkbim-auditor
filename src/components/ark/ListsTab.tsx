@@ -427,12 +427,40 @@ function CategoryView({
                           )}
                         </Button>
                       </td>
-                      <td className="truncate p-2 align-middle font-medium">{i.key}</td>
-                      {allColumns.map((c) => (
-                        <td key={c} className="truncate p-2 align-middle text-xs" title={i.params[c] ?? ""}>
-                          {i.params[c] ?? ""}
-                        </td>
-                      ))}
+                      <td
+                        className="truncate p-2 align-middle font-medium"
+                        title="Duplo-clique para renomear chave"
+                        onDoubleClick={() => handleRenameKey(i.key)}
+                      >
+                        {i.key}
+                      </td>
+                      {allColumns.map((c) => {
+                        const isEditing = editing?.key === i.key && editing.col === c;
+                        return (
+                          <td
+                            key={c}
+                            className="truncate p-1 align-middle text-xs"
+                            title={i.params[c] ?? ""}
+                            onDoubleClick={() => startEdit(i.key, c, i.params[c] ?? "")}
+                          >
+                            {isEditing ? (
+                              <Input
+                                autoFocus
+                                value={editVal}
+                                onChange={(e) => setEditVal(e.target.value)}
+                                onBlur={commitEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") commitEdit();
+                                  else if (e.key === "Escape") setEditing(null);
+                                }}
+                                className="h-6 text-xs"
+                              />
+                            ) : (
+                              <span className="block truncate p-1">{i.params[c] ?? ""}</span>
+                            )}
+                          </td>
+                        );
+                      })}
                       <td className="p-2 text-right font-mono text-xs">
                         {fmtQty(i.totalQuantity)}
                       </td>
