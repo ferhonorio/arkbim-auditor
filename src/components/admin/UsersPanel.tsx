@@ -175,6 +175,28 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
         </Button>
       </div>
 
+      <div className="rounded-lg border bg-card p-3">
+        <div className="mb-1 text-sm font-medium">Nome do projeto</div>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Aparece no cabeçalho dos visualizadores e comentadores e nos links públicos.
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            value={projectDraft}
+            onChange={(e) => setProjectDraft(e.target.value)}
+            placeholder="Ex.: Edifício Residencial Aurora"
+            className="h-8 max-w-md text-xs"
+          />
+          <Button
+            size="sm"
+            onClick={onSaveProject}
+            disabled={savingProject || projectDraft.trim() === projectName.trim()}
+          >
+            Salvar
+          </Button>
+        </div>
+      </div>
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
