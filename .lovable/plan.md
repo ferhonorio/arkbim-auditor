@@ -1,113 +1,116 @@
 ## Objetivo
 
-Reformular a aba "Consolidada" para se tornar um **gerenciador de listas de componentes** (Portas, Mobiliário, Peças hidrosanitárias, etc.). Cada lista é um catálogo persistente, alimentado a partir do dataset carregado por meio de filtros + parâmetros configuráveis, com suporte a múltiplos arquivos/pavimentos e consolidações incrementais.
+Refatorar o fluxo de listas consolidadas: a aba "Listas" deixa de ter editor de filtros e vira apenas o **catálogo** das categorias consolidadas. A consolidação acontece **dentro da aba "Análise & Agrupamentos"**, usando os dados já filtrados/agrupados ali, com `Type Mark` como chave única por categoria.
 
-## 1. Modelo de dados (lib/store + lib/grouping)
+## 1. Mudança de modelo (`src/lib/component-lists.ts` + `src/lib/store.ts`)
 
-### Conceito: `ComponentList`
-Uma lista consolidada (ex.: "Portas") com:
-- `id`, `name` (editável), `icon` opcional, `createdAt`, `updatedAt`
-- `filters: Filter[]` — filtros de inclusão (mesmo modelo do painel atual)
-- `excludeFilters: Filter[]` — filtros de exclusão
-- `keyColumns: string[]` — chave de identidade do item (ex.: `Type Mark`)
-- `paramColumns: string[]` — parâmetros levados para a lista (ex.: `Description`, `Model`, `Width`, `Height`)
-- `fileColumn: string` — coluna de pavimento/arquivo (default `Nome do arquivo`)
-- `columnAliases: Record<string,string>` — renomeação visual estilo Power BI (não altera origem)
-- `items: ConsolidatedItem[]` — itens persistidos
-- `sourceFingerprints: string[]` — registro dos arquivos já consolidados (para detectar novos)
+`ComponentList` é simplificada — passa a ser um **contêiner por categoria**, sem regras próprias:
 
-### Conceito: `ConsolidatedItem`
-- `key` (hash das `keyColumns`)
-- `keyValues: Record<string,string>`
-- `params: Record<string,string>` (valor canônico por parâmetro)
-- `occurrences: { file: string; quantity: number; ids: string[] }[]` — quantidade por pavimento/arquivo
-- `totalQuantity` (derivado da soma)
-- `firstSeenAt`, `lastUpdatedAt`
+- Mantém: `id`, `name` (categoria, ex. "Portas"), `icon?`, `columnAliases`, `items`, `sourceFiles`, `createdAt`, `updatedAt`.
+- Mantém: `idCol`, `fileColumn` (default `Nome do arquivo`).
+- **Remove**: `filters`, `excludeFilters`, `keyColumns`, `paramColumns`. A chave passa a ser fixa = `Type Mark`. As colunas de parâmetros são definidas dinamicamente no momento da consolidação (vindas das colunas atuais visíveis no agrupamento).
+- `ConsolidatedItem` ganha `columns: string[]` para registrar quais parâmetros foram salvos (a lista pode acumular parâmetros novos quando uma consolidação futura traz colunas adicionais; valores ausentes ficam vazios).
 
-### Store
-Adicionar em `useArk`:
-- `componentLists: ComponentList[]`
-- `activeComponentListId: string | null`
-- ações: `createList`, `renameList`, `deleteList`, `duplicateList`, `updateListConfig`, `setColumnAlias`, `consolidateIntoList(listId, mode)`, `removeItemFromList`
-
-Persistência via `persist` (mesmo padrão atual). Cuidado com volume: opcional armazenar só `items` resumidos.
-
-## 2. Fluxo de consolidação
-
-1. Usuário abre a aba "Listas Consolidadas".
-2. **Sidebar esquerda**: lista de "componentes" salvos (Portas, Janelas, Mobiliário…) + botão "Nova lista".
-3. Ao criar/editar lista:
-   - **Passo 1 — Filtros de inclusão**: igual ao painel de filtros (coluna, operador, valor; múltiplos).
-   - **Passo 2 — Filtros de exclusão**: mesmo modelo, mas removendo do conjunto.
-   - **Passo 3 — Coluna-chave (identidade do item)**: 1+ colunas.
-   - **Passo 4 — Parâmetros consolidados**: colunas que vão aparecer na lista (independem dos filtros). Reordenáveis (drag).
-   - **Passo 5 — Coluna de arquivo/pavimento**: select.
-4. Pré-visualização ao vivo do que será consolidado, mostrando: total de linhas após filtros, nº de itens únicos, conflitos de parâmetros (quando o mesmo `key` tem `param` divergente entre arquivos — escolher canônico = mais frequente; sinalizar).
-5. Botão **"Consolidar"** abre modal de modo:
-   - **Mesclar/atualizar** — atualiza itens existentes e adiciona novos
-   - **Substituir** — sobrescreve valores em conflito
-   - **Apenas novos** — ignora itens já existentes na lista, grava só os inéditos
-   - **Ignorar conflitos** — atualiza só `occurrences`, mantém `params` antigos
-
-## 3. Re-consolidação ao subir novos arquivos
-
-- Cada `ComponentList` guarda os `Nome do arquivo` já processados.
-- Quando o `dataset` muda (novo upload), detectar arquivos novos comparando com `sourceFingerprints`.
-- Banner no topo da aba: "Detectamos N pavimentos novos. Consolidar nas listas existentes?" com a mesma escolha de modo acima, podendo selecionar quais listas atualizar.
-
-## 4. Visualização da lista consolidada
-
-Layout limpo, leve, voltado a usuários não técnicos:
+Nova função pública em `component-lists.ts`:
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│  Portas                              [Editar] [Exportar] [Nova] │
-│  124 itens · 8 pavimentos · atualizado 08/05/2026               │
-├─────────────────────────────────────────────────────────────────┤
-│  🔎 buscar…   [coluna ▾]  [pavimento ▾]                         │
-├──────┬──────────────┬─────────┬──────┬──────┬─────┬─────────────┤
-│ ID   │ Descrição ✎  │ Modelo  │ Larg │ Alt  │ Qtd │ Pavimentos  │
-├──────┼──────────────┼─────────┼──────┼──────┼─────┼─────────────┤
-│ P027 │ Porta giro…  │ Freijó  │  80  │ 190  │  4  │ Pav1·Pav2   │
-│ P076 │ Porta apoio  │ PIM-C3  │  90  │ 210  │  2  │ Pav1        │
-└──────┴──────────────┴─────────┴──────┴──────┴─────┴─────────────┘
+consolidateFromRows(
+  rows: Row[],            // já filtrados, vindos do AnaliseTab
+  columns: string[],      // colunas visíveis no agrupamento (= colunas salvas)
+  list: ComponentList,
+  fileColumn: string,
+  idCol: string,
+) => {
+  preview: ConsolidatedItem[],     // agregados por Type Mark
+  conflicts: ConflictReport[],     // type marks que já existem na lista com params diferentes
+  newItems: ConsolidatedItem[],    // type marks inéditos
+  invalidRows: number,             // sem Type Mark
+}
 ```
 
-- Cabeçalhos clicáveis: **duplo-clique renomeia** (alias por coluna). Ícone ✎ sutil ao hover. Restaurar nome original via menu de contexto.
-- Coluna **Pavimentos** mostra chips dos arquivos; tooltip exibe quantidade por pavimento.
-- Linha expansível: detalha `occurrences` (arquivo → qtd → IDs) e divergências de parâmetros entre arquivos.
-- Filtros locais (busca, por pavimento, por coluna).
-- Exportar XLSX da lista (uma aba por lista).
+`ConflictReport`: `{ typeMark, existing: Record<col,string>, incoming: Record<col,string>, differingCols: string[] }`.
 
-## 5. Componentes / Arquivos
+`commitConsolidation(list, preview, mode)` aplica:
+- `overwrite` — substitui params dos itens em conflito; mantém histórico de `occurrences`.
+- `only-new` — ignora type marks já existentes; grava apenas inéditos.
+- (sem mais "merge"/"ignore-conflicts" — escopo enxuto pedido pelo usuário.)
+
+Store actions novas/ajustadas em `useArk`:
+- `createComponentList(name)` — só nome/categoria.
+- `renameComponentList`, `deleteComponentList`, `duplicateComponentList`.
+- `consolidateIntoList(listId, rows, columns, mode)` — empacota as duas funções acima.
+- Remove ações ligadas a filtros/keyColumns/paramColumns das listas.
+
+Migração: dados antigos persistidos (com `filters`/`keyColumns`) são lidos uma vez no `persist.onRehydrate` — campos legados são descartados, `items` são preservados.
+
+## 2. `AnaliseTab` — botão "Consolidar na lista…"
+
+Novo bloco no painel de ações (perto de Exportar):
+
+```text
+[ Consolidar dados filtrados ▾ ]
+   ├─ Selecionar categoria: [ Portas ▾ ]   (lista as ComponentList)
+   ├─ + Nova categoria…
+   └─ [ Consolidar ]
+```
+
+Comportamento:
+1. Origem dos dados = `filterRowsByVisualRules(filtered, ...)` (mesma base já mostrada na tabela).
+2. Colunas salvas = colunas atualmente exibidas/agrupadas no AnaliseTab (chaves de `groupBy` + `concatCols` + `Type Mark` se ausente).
+3. Valida que `Type Mark` existe em `dataset.columns`. Caso contrário, toast de erro.
+4. Roda `consolidateFromRows` → se `conflicts.length > 0`, abre **`ConsolidateDialog`**:
+   - Mostra: nº de itens novos, nº em conflito (com tabela compacta: type mark + colunas divergentes em destaque).
+   - Botões: **Sobrepor (overwrite)** · **Apenas novos (only-new)** · **Cancelar**.
+5. Sem conflitos → grava direto e mostra toast "X itens adicionados a Portas".
+
+## 3. `ListsTab` — vira catálogo
+
+Reescrita enxuta:
+
+```text
+┌──────────────┬──────────────────────────────────────────────┐
+│ Categorias   │  Portas                          [Renomear]  │
+│ + Nova       │  124 itens · 8 pavimentos · 08/05/2026       │
+│ • Portas  ✓  │ ─────────────────────────────────────────────│
+│ • Janelas    │  🔎 buscar…  [pavimento ▾]   [Exportar XLSX] │
+│ • Mobiliário │ ─────────────────────────────────────────────│
+│              │  Type Mark │ <colunas dinâmicas> │ Qtd │ Pav │
+└──────────────┴──────────────────────────────────────────────┘
+```
+
+- Sidebar esquerda: lista de categorias + botão "Nova categoria" (modal só com nome).
+- Conteúdo: tabela read-only dos `items` da lista ativa, colunas = união de `columns` registradas nos itens.
+- Cabeçalhos: duplo-clique renomeia (mantém `columnAliases` Power BI-style).
+- Linha expansível mostra `occurrences` (arquivo · qtd · IDs).
+- Ações por linha: remover item; ação no topo: limpar lista, exportar XLSX, excluir categoria.
+- **Removido** desta aba: editor de filtros, editor de exclusão, seletor de keyColumns/paramColumns, preview de filtros, banner de "novos arquivos" (a consolidação agora é manual a partir do AnaliseTab).
+
+## 4. Componentes / arquivos
 
 Novos:
-- `src/lib/component-lists.ts` — tipos `ComponentList`, `ConsolidatedItem`, função `consolidateRows(rows, cfg, existingItems, mode)`.
-- `src/components/ark/lists/ComponentListsTab.tsx` — orquestrador (sidebar + conteúdo).
-- `src/components/ark/lists/ListSidebar.tsx`
-- `src/components/ark/lists/ListEditor.tsx` — wizard/edição (filtros, exclusão, chave, parâmetros, coluna de arquivo).
-- `src/components/ark/lists/ListPreview.tsx` — pré-visualização antes de consolidar.
-- `src/components/ark/lists/ConsolidatedListView.tsx` — tabela final com renomeação de colunas.
-- `src/components/ark/lists/NewFilesBanner.tsx` — alerta de novos pavimentos.
-- `src/components/ark/lists/ConsolidateModeDialog.tsx` — escolha do modo.
+- `src/components/ark/lists/ConsolidateDialog.tsx` — diálogo de conflito com modos `overwrite` / `only-new`.
+- `src/components/ark/lists/CategorySidebar.tsx` — sidebar de categorias.
+- `src/components/ark/lists/CategoryTable.tsx` — tabela read-only.
+- `src/components/ark/analise/ConsolidateAction.tsx` — botão + popover usado no `AnaliseTab`.
 
 Modificados:
-- `src/lib/store.ts` — novo slice `componentLists`.
-- `src/lib/grouping.ts` — reaproveitar `applyFilters` (já compatível) e adicionar `applyExcludeFilters` (negação do `applyFilters`).
-- Substituir/renomear a aba atual `ConsolidadaTab.tsx` pelo novo orquestrador (manter o `buildConsolidation` antigo como utilitário caso seja útil para diff por arquivo dentro do detalhe do item).
+- `src/lib/component-lists.ts` — modelo + funções acima.
+- `src/lib/store.ts` — slice e actions.
+- `src/components/ark/AnaliseTab.tsx` — adiciona `<ConsolidateAction />` perto do botão Exportar.
+- `src/components/ark/ListsTab.tsx` — reescrito como catálogo.
 
-## 6. Decisões de UX importantes
+## 5. Regras-chave (resumo)
 
-- Filtros para "separar componentes" e parâmetros levados para a lista são **independentes** (atende à necessidade do `agrupamento padrão` ser filtro mas não coluna).
-- Renomeação de coluna é apenas visual (`columnAliases`), nunca altera `paramColumns`.
-- Itens da lista nunca são perdidos automaticamente; remoções só por ação explícita ou pelo modo "Substituir".
-- Quantidade total = soma das quantidades por arquivo, sempre derivada de `occurrences`.
+- Chave única por categoria = `Type Mark` (trim, case-sensitive).
+- Linhas sem `Type Mark` são ignoradas e contadas em `invalidRows` (mostrar no toast).
+- Quando o mesmo Type Mark aparece várias vezes nos dados filtrados, valor canônico de cada coluna = mais frequente; `occurrences` agrega por arquivo.
+- `overwrite` substitui params em conflito; `only-new` mantém os existentes intactos.
+- Persistência continua via Zustand `persist`.
 
-## 7. Validação
+## 6. Validação manual
 
-- Criar lista "Portas" filtrando `Agrupamento padrão = Portas`, chave `Type Mark`, parâmetros `Description, Model, Width, Height`. Conferir que `Agrupamento padrão` **não** vira coluna da lista.
-- Adicionar exclusão `Description contém "PROVISÓRIA"` e ver itens sumirem.
-- Renomear "Description" → "Descrição"; recarregar a página e confirmar persistência.
-- Subir novo arquivo (novo pavimento), aceitar consolidação no modo "Mesclar"; conferir que `occurrences` ganha entrada nova e `totalQuantity` aumenta.
-- Repetir consolidação no modo "Apenas novos" e confirmar que itens existentes ficam intactos.
-- Criar segunda lista "Pisos" com chave/params diferentes e validar isolamento.
+1. Filtrar `Agrupamento padrão = Portas` no AnaliseTab → "Consolidar dados filtrados" → criar categoria "Portas". Confirmar que aparece na aba Listas com as colunas atuais.
+2. Mudar `Description` de um Type Mark, refazer consolidação → diálogo deve listar o conflito; testar `Sobrepor` (atualiza) e `Apenas novos` (mantém antigo).
+3. Subir novo arquivo (novo pavimento) com Type Marks repetidos → consolidar → `occurrences` ganha entrada, sem duplicar item.
+4. Type Mark vazio em algumas linhas → toast informa "N linhas ignoradas (sem Type Mark)".
+5. Criar segunda categoria "Janelas" e validar isolamento total entre listas.
