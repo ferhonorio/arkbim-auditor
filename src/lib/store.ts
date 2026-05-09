@@ -400,6 +400,13 @@ export const useArk = create<ArkState>()(
         componentLists: s.componentLists,
         activeComponentListId: s.activeComponentListId,
       }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<ArkState>;
+        const lists = Array.isArray(p.componentLists)
+          ? p.componentLists.map((l) => migrateComponentList(l as ComponentList))
+          : current.componentLists;
+        return { ...current, ...p, componentLists: lists } as ArkState;
+      },
     },
   ),
 );
