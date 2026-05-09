@@ -301,9 +301,11 @@ function CategoryView({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold">{list.name}</h2>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRename}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
+            {!readOnly && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRename}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {list.items.length} itens · {allFloors.length} pavimentos · chave:{" "}
@@ -323,26 +325,30 @@ function CategoryView({
           >
             <Presentation className="mr-1 h-3.5 w-3.5" /> Modo apresentação
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConfirmUndo(true)}
-            disabled={!list.lastSnapshot}
-            title={
-              list.lastSnapshot
-                ? `Reverte ${list.lastSnapshot.summary.added} novo(s) / ${list.lastSnapshot.summary.updated} sobrescrito(s) — ${new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}`
-                : "Nada para desfazer"
-            }
-          >
-            <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer última
-          </Button>
-          <Button
-            size="sm"
-            variant={showFloorMap ? "default" : "outline"}
-            onClick={() => setShowFloorMap((v) => !v)}
-          >
-            <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
-          </Button>
+          {!readOnly && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmUndo(true)}
+              disabled={!list.lastSnapshot}
+              title={
+                list.lastSnapshot
+                  ? `Reverte ${list.lastSnapshot.summary.added} novo(s) / ${list.lastSnapshot.summary.updated} sobrescrito(s) — ${new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}`
+                  : "Nada para desfazer"
+              }
+            >
+              <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer última
+            </Button>
+          )}
+          {!readOnly && (
+            <Button
+              size="sm"
+              variant={showFloorMap ? "default" : "outline"}
+              onClick={() => setShowFloorMap((v) => !v)}
+            >
+              <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
+            </Button>
+          )}
           <ExportMenu
             list={list}
             allLists={allLists}
@@ -353,12 +359,16 @@ function CategoryView({
               return Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
             }}
           />
-          <Button size="sm" variant="outline" onClick={onClear}>
-            Limpar lista
-          </Button>
-          <Button size="sm" variant="destructive" onClick={onDelete}>
-            <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir categoria
-          </Button>
+          {!readOnly && (
+            <Button size="sm" variant="outline" onClick={onClear}>
+              Limpar lista
+            </Button>
+          )}
+          {!readOnly && (
+            <Button size="sm" variant="destructive" onClick={onDelete}>
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir categoria
+            </Button>
+          )}
         </div>
       </div>
 
