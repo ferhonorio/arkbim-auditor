@@ -41,12 +41,16 @@ import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
 import { PresentationView } from "@/components/ark/lists/PresentationView";
 import { ExportMenu } from "@/components/ark/lists/ExportMenu";
 import { ShareLinksDialog } from "@/components/ark/lists/ShareLinksDialog";
+import { ItemCommentsPopover } from "@/components/ark/lists/ItemCommentsPopover";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
 const QTY_COL_WIDTH = 100;
 
-export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
+export function ListsTab({
+  readOnly = false,
+  canComment = false,
+}: { readOnly?: boolean; canComment?: boolean } = {}) {
   const lists = useArk((s) => s.componentLists);
   const activeId = useArk((s) => s.activeComponentListId);
   const setActive = useArk((s) => s.setActiveComponentList);
