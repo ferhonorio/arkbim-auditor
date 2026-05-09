@@ -65,23 +65,23 @@ export function ResolveInconsistenciesDialog({ open, onOpenChange, rule, rows, s
     );
   }, [inconsistentKeys, firstKeyCol]);
 
-  // Compute variants per inconsistent key from the dataset rows
+  // Compute variants per inconsistent key from the SCOPED rows (filters + grouping).
   const variantsByKey = useMemo(() => {
     const out = new Map<string, Variant[]>();
-    if (!dataset) return out;
+    if (!scopedRows.length) return out;
     const cmp = rule.compareColumns;
     const keyCols = rule.keyColumns;
     const buildKey = (r: Row) => keyCols.map((c) => (r[c] ?? "").trim()).join("\u0001");
     const rowsByKey = new Map<string, Row[]>();
-    for (const r of dataset.rows) {
+    for (const r of scopedRows) {
       const k = buildKey(r);
       if (!evals.get(k)?.inconsistent) continue;
       if (!rowsByKey.has(k)) rowsByKey.set(k, []);
       rowsByKey.get(k)!.push(r);
     }
-    for (const [k, rows] of rowsByKey) {
+    for (const [k, rs] of rowsByKey) {
       const map = new Map<string, Variant>();
-      for (const r of rows) {
+      for (const r of rs) {
         const values: Record<string, string> = {};
         for (const c of cmp) values[c] = (r[c] ?? "").trim();
         const sig = cmp.map((c) => values[c]).join("\u0001");
@@ -95,7 +95,7 @@ export function ResolveInconsistenciesDialog({ open, onOpenChange, rule, rows, s
       );
     }
     return out;
-  }, [dataset, evals, rule]);
+  }, [scopedRows, evals, rule]);
 
   // expanded outer (first-key) groups + inner subkeys
   const [expandedFirst, setExpandedFirst] = useState<Set<string>>(new Set());
