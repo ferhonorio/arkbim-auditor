@@ -20,6 +20,7 @@ interface RpcResult {
   ok: boolean;
   reason?: string;
   scope?: "all" | "category";
+  project_name?: string | null;
   lists?: { id: string; name: string; data: unknown; updated_at: string }[];
 }
 
@@ -28,6 +29,7 @@ function SharePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lists, setLists] = useState<ComponentList[]>([]);
+  const [projectName, setProjectName] = useState<string>("ArkBIM");
 
   useEffect(() => {
     let alive = true;
