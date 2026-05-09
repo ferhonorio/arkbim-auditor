@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { exportXLSX } from "@/lib/export";
 import { ConsolidateAction } from "@/components/ark/lists/ConsolidateAction";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 const RULE_COLORS = ["#fee2e2", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#ffedd5"];
@@ -74,6 +75,7 @@ export function AnaliseTab() {
   const deleteGroupingPreset = useArk((s) => s.deleteGroupingPreset);
 
   const [page, setPage] = useState(0);
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<Set<string>>(new Set());
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
@@ -507,8 +509,22 @@ export function AnaliseTab() {
               Exportar filtrado
             </Button>
             <ConsolidateAction
-              rows={ruleFiltered}
+              rows={
+                selectedGroupKeys.size > 0
+                  ? groups
+                      .filter((g) => selectedGroupKeys.has(g.key))
+                      .flatMap((g) => g.rawRows)
+                  : ruleFiltered
+              }
               columns={Array.from(new Set([...groupBy, ...concatCols]))}
+              selectedCount={
+                selectedGroupKeys.size > 0
+                  ? groups
+                      .filter((g) => selectedGroupKeys.has(g.key))
+                      .reduce((s, g) => s + g.rawRows.length, 0)
+                  : 0
+              }
+              onConsolidated={() => setSelectedGroupKeys(new Set())}
             />
           </div>
         }
@@ -593,6 +609,21 @@ export function AnaliseTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={
+                      pageGroups.length > 0 &&
+                      pageGroups.every((g) => selectedGroupKeys.has(g.key))
+                    }
+                    onCheckedChange={(v) => {
+                      const next = new Set(selectedGroupKeys);
+                      if (v) pageGroups.forEach((g) => next.add(g.key));
+                      else pageGroups.forEach((g) => next.delete(g.key));
+                      setSelectedGroupKeys(next);
+                    }}
+                    aria-label="Selecionar página"
+                  />
+                </TableHead>
                 {groupVisible.map((c) => (
                   <TableHead key={c}>{c}</TableHead>
                 ))}
@@ -647,6 +678,18 @@ export function AnaliseTab() {
                     title={why}
                     className={why ? "cursor-help" : undefined}
                   >
+                    <TableCell className="p-1">
+                      <Checkbox
+                        checked={selectedGroupKeys.has(g.key)}
+                        onCheckedChange={(v) => {
+                          const next = new Set(selectedGroupKeys);
+                          if (v) next.add(g.key);
+                          else next.delete(g.key);
+                          setSelectedGroupKeys(next);
+                        }}
+                        aria-label="Selecionar"
+                      />
+                    </TableCell>
                     {groupVisible.map((c) => (
                       <TableCell key={c}>{g.values[c]}</TableCell>
                     ))}
@@ -687,7 +730,7 @@ export function AnaliseTab() {
               {!pageGroups.length && (
                 <TableRow>
                   <TableCell
-                    colSpan={groupVisible.length + concatCols.length + 1}
+                    colSpan={groupVisible.length + concatCols.length + 2}
                     className="text-center text-sm text-muted-foreground"
                   >
                     {dataset

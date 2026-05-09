@@ -12,8 +12,24 @@ import type {
   ComponentList,
   ConsolidationMode,
   ConsolidatePlan,
+  MeasureMode,
 } from "./component-lists";
-import { commitConsolidation, planConsolidation } from "./component-lists";
+import {
+  commitConsolidation,
+  planConsolidation,
+  migrateComponentList,
+  DEFAULT_KEY_COLUMN,
+  DEFAULT_FLOOR_COLUMN,
+} from "./component-lists";
+
+export interface CreateListOpts {
+  name: string;
+  keyColumn?: string;
+  floorColumn?: string;
+  fileColumn?: string;
+  measureMode?: MeasureMode;
+  areaColumn?: string;
+}
 
 export interface ConsolidatedSnapshot {
   reference: ReferenceItem[];
@@ -84,12 +100,13 @@ interface ArkState {
   componentLists: ComponentList[];
   activeComponentListId: string | null;
   setActiveComponentList: (id: string | null) => void;
-  createComponentList: (name: string) => string;
+  createComponentList: (opts: CreateListOpts | string) => string;
   duplicateComponentList: (id: string) => string | null;
   renameComponentList: (id: string, name: string) => void;
   deleteComponentList: (id: string) => void;
   updateComponentList: (id: string, patch: Partial<ComponentList>) => void;
   setColumnAlias: (id: string, column: string, alias: string) => void;
+  setColumnWidth: (id: string, column: string, width: number) => void;
   applyConsolidation: (
     id: string,
     plan: ConsolidatePlan,
@@ -97,6 +114,11 @@ interface ArkState {
   ) => { added: number; updated: number; skipped: number; newFiles: string[] } | null;
   removeListItem: (id: string, key: string) => void;
   clearListItems: (id: string) => void;
+
+  // Row selection (for consolidation)
+  selectedRowIds: string[];
+  setSelectedRowIds: (ids: string[]) => void;
+  clearSelectedRowIds: () => void;
 
   // Saved presets
   filterPresets: SavedPreset<Filter[]>[];
@@ -167,15 +189,23 @@ export const useArk = create<ArkState>()(
       componentLists: [],
       activeComponentListId: null,
       setActiveComponentList: (id) => set({ activeComponentListId: id }),
-      createComponentList: (name) => {
+      createComponentList: (input) => {
+        const opts: CreateListOpts =
+          typeof input === "string" ? { name: input } : input;
         const id = crypto.randomUUID();
         const now = Date.now();
+        const fileColumn = opts.fileColumn || DEFAULT_FLOOR_COLUMN;
         const list: ComponentList = {
           id,
-          name: name.trim() || "Nova categoria",
-          fileColumn: "Nome do arquivo",
+          name: (opts.name || "").trim() || "Nova categoria",
+          fileColumn,
           idCol: "ID",
+          keyColumn: opts.keyColumn || DEFAULT_KEY_COLUMN,
+          floorColumn: opts.floorColumn || fileColumn,
+          measureMode: opts.measureMode || "count",
+          areaColumn: opts.areaColumn,
           columnAliases: {},
+          columnWidths: {},
           items: [],
           sourceFiles: [],
           createdAt: now,
@@ -233,6 +263,16 @@ export const useArk = create<ArkState>()(
             return { ...l, columnAliases: aliases, updatedAt: Date.now() };
           }),
         })),
+      setColumnWidth: (id, column, width) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            const widths = { ...(l.columnWidths ?? {}) };
+            if (width > 0) widths[column] = Math.round(width);
+            else delete widths[column];
+            return { ...l, columnWidths: widths, updatedAt: Date.now() };
+          }),
+        })),
       applyConsolidation: (id, plan, mode) => {
         const state = get();
         const list = state.componentLists.find((l) => l.id === id);
@@ -275,6 +315,10 @@ export const useArk = create<ArkState>()(
               : l,
           ),
         })),
+
+      selectedRowIds: [],
+      setSelectedRowIds: (ids) => set({ selectedRowIds: ids }),
+      clearSelectedRowIds: () => set({ selectedRowIds: [] }),
 
       filterPresets: [],
       rulePresets: [],
@@ -356,6 +400,13 @@ export const useArk = create<ArkState>()(
         componentLists: s.componentLists,
         activeComponentListId: s.activeComponentListId,
       }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<ArkState>;
+        const lists = Array.isArray(p.componentLists)
+          ? p.componentLists.map((l) => migrateComponentList(l as ComponentList))
+          : current.componentLists;
+        return { ...current, ...p, componentLists: lists } as ArkState;
+      },
     },
   ),
 );

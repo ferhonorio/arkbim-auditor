@@ -1,17 +1,23 @@
 import type { Row } from "./parse";
 
-export const KEY_COLUMN = "Type Mark";
+export const DEFAULT_KEY_COLUMN = "Type Mark";
+export const DEFAULT_FLOOR_COLUMN = "Nome do arquivo";
+/** @deprecated Use list.keyColumn. Kept for retrocompat with old imports. */
+export const KEY_COLUMN = DEFAULT_KEY_COLUMN;
+
+export type MeasureMode = "count" | "area";
 
 export interface FileOccurrence {
-  file: string;
-  quantity: number;
+  floor: string; // value of floorColumn
+  file: string; // source file (Nome do arquivo)
+  quantity: number; // count OR sum of area
   ids: string[];
 }
 
 export interface ConsolidatedItem {
-  key: string; // Type Mark value
+  key: string;
   params: Record<string, string>;
-  columns: string[]; // columns saved when item was last consolidated
+  columns: string[];
   occurrences: FileOccurrence[];
   totalQuantity: number;
   firstSeenAt: number;
@@ -20,11 +26,16 @@ export interface ConsolidatedItem {
 
 export interface ComponentList {
   id: string;
-  name: string; // category name
+  name: string;
   icon?: string;
-  fileColumn: string;
+  fileColumn: string; // typically "Nome do arquivo"
   idCol: string;
+  keyColumn: string;
+  floorColumn: string;
+  measureMode: MeasureMode;
+  areaColumn?: string;
   columnAliases: Record<string, string>;
+  columnWidths?: Record<string, number>;
   items: ConsolidatedItem[];
   sourceFiles: string[];
   createdAt: number;
@@ -46,7 +57,27 @@ export interface ConsolidatePlan {
   conflicts: ConflictReport[];
   unchanged: ConsolidatedItem[];
   invalidRows: number;
+  invalidArea: number;
   newFiles: string[];
+}
+
+export function parseLocaleNumber(raw: string | undefined | null): number {
+  if (raw == null) return NaN;
+  let s = String(raw).trim();
+  if (!s) return NaN;
+  // Strip units like "m²", spaces
+  s = s.replace(/[^\d,.\-+eE]/g, "");
+  if (!s) return NaN;
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    // Assume "1.234,56" → comma is decimal
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 const canonical = (rows: Row[], col: string): string => {
@@ -72,14 +103,21 @@ export function planConsolidation(
   columns: string[],
   list: ComponentList,
 ): ConsolidatePlan {
-  // Param columns: everything from `columns` except Type Mark and the file column
+  const keyCol = list.keyColumn || DEFAULT_KEY_COLUMN;
+  const floorCol = list.floorColumn || list.fileColumn;
+  const fileCol = list.fileColumn;
   const paramCols = columns.filter(
-    (c) => c && c !== KEY_COLUMN && c !== list.fileColumn,
+    (c) =>
+      c &&
+      c !== keyCol &&
+      c !== fileCol &&
+      c !== floorCol &&
+      c !== list.areaColumn,
   );
   const buckets = new Map<string, Row[]>();
   let invalid = 0;
   for (const r of rows) {
-    const k = (r[KEY_COLUMN] ?? "").trim();
+    const k = (r[keyCol] ?? "").trim();
     if (!k) {
       invalid++;
       continue;
@@ -92,6 +130,7 @@ export function planConsolidation(
   const existingByKey = new Map(list.items.map((i) => [i.key, i]));
   const knownFiles = new Set(list.sourceFiles);
   const newFiles = new Set<string>();
+  let invalidArea = 0;
 
   const preview: ConsolidatedItem[] = [];
   const newItems: ConsolidatedItem[] = [];
@@ -102,25 +141,48 @@ export function planConsolidation(
     const params: Record<string, string> = {};
     for (const c of paramCols) params[c] = canonical(grp, c);
 
-    const byFile = new Map<string, Row[]>();
+    // Group by floor + file to preserve provenance
+    const byFloorFile = new Map<string, { floor: string; file: string; rows: Row[] }>();
     for (const r of grp) {
-      const f = (r[list.fileColumn] ?? "").trim() || "(sem arquivo)";
-      if (!byFile.has(f)) byFile.set(f, []);
-      byFile.get(f)!.push(r);
+      const floor = (r[floorCol] ?? "").trim() || "(sem pavimento)";
+      const file = (r[fileCol] ?? "").trim() || "(sem arquivo)";
+      const k = `${floor}\u0001${file}`;
+      if (!byFloorFile.has(k)) byFloorFile.set(k, { floor, file, rows: [] });
+      byFloorFile.get(k)!.rows.push(r);
+      if (!knownFiles.has(file)) newFiles.add(file);
     }
-    for (const f of byFile.keys()) if (!knownFiles.has(f)) newFiles.add(f);
-    const occurrences: FileOccurrence[] = Array.from(byFile, ([file, rs]) => ({
-      file,
-      quantity: rs.length,
-      ids: rs.map((r) => r[list.idCol]).filter(Boolean),
-    })).sort((a, b) => a.file.localeCompare(b.file));
+
+    const occurrences: FileOccurrence[] = Array.from(byFloorFile.values()).map(
+      ({ floor, file, rows: rs }) => {
+        let quantity: number;
+        if (list.measureMode === "area" && list.areaColumn) {
+          let sum = 0;
+          for (const r of rs) {
+            const n = parseLocaleNumber(r[list.areaColumn]);
+            if (Number.isFinite(n) && n > 0) sum += n;
+            else invalidArea++;
+          }
+          quantity = Math.round(sum * 1000) / 1000;
+        } else {
+          quantity = rs.length;
+        }
+        return {
+          floor,
+          file,
+          quantity,
+          ids: rs.map((r) => r[list.idCol]).filter(Boolean),
+        };
+      },
+    ).sort((a, b) =>
+      a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
+    );
 
     const item: ConsolidatedItem = {
       key,
       params,
       columns: paramCols,
       occurrences,
-      totalQuantity: occurrences.reduce((s, o) => s + o.quantity, 0),
+      totalQuantity: Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
       firstSeenAt: now,
       lastUpdatedAt: now,
     };
@@ -159,6 +221,7 @@ export function planConsolidation(
     conflicts,
     unchanged,
     invalidRows: invalid,
+    invalidArea,
     newFiles: Array.from(newFiles),
   };
 }
@@ -182,15 +245,18 @@ export function commitConsolidation(
   let updated = 0;
   let skipped = 0;
 
+  const occKey = (o: FileOccurrence) => `${o.floor}\u0001${o.file}`;
+
   const mergeOccurrences = (prev: ConsolidatedItem, next: ConsolidatedItem) => {
-    const byFile = new Map(prev.occurrences.map((o) => [o.file, o]));
-    for (const o of next.occurrences) byFile.set(o.file, o);
-    const occurrences = Array.from(byFile.values()).sort((a, b) =>
-      a.file.localeCompare(b.file),
+    const byKey = new Map(prev.occurrences.map((o) => [occKey(o), o]));
+    for (const o of next.occurrences) byKey.set(occKey(o), o);
+    const occurrences = Array.from(byKey.values()).sort(
+      (a, b) => a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
     );
     return {
       occurrences,
-      totalQuantity: occurrences.reduce((s, o) => s + o.quantity, 0),
+      totalQuantity:
+        Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
     };
   };
 
@@ -206,7 +272,6 @@ export function commitConsolidation(
     }
     const occ = mergeOccurrences(prev, item);
     if (mode === "only-new") {
-      // keep params untouched, but always update occurrences history
       map.set(item.key, {
         ...prev,
         ...occ,
@@ -215,7 +280,6 @@ export function commitConsolidation(
       });
       skipped++;
     } else {
-      // overwrite params (only for differing/incoming non-empty values)
       const params = { ...prev.params };
       for (const c of item.columns) {
         const v = item.params[c];
@@ -238,5 +302,37 @@ export function commitConsolidation(
     updated,
     skipped,
     newFiles: plan.newFiles,
+  };
+}
+
+/** Migration helper: ensure new fields exist on persisted lists. */
+export function migrateComponentList(l: Partial<ComponentList> & { id: string; name: string }): ComponentList {
+  const fileColumn = l.fileColumn || DEFAULT_FLOOR_COLUMN;
+  const occMigrated = (l.items ?? []).map((i) => ({
+    ...i,
+    occurrences: (i.occurrences ?? []).map((o: FileOccurrence | { file: string; quantity: number; ids: string[] }) => ({
+      floor: ("floor" in o && o.floor) ? o.floor : (o as { file: string }).file,
+      file: o.file,
+      quantity: o.quantity,
+      ids: o.ids ?? [],
+    })),
+    columns: i.columns ?? [],
+  }));
+  return {
+    id: l.id,
+    name: l.name,
+    icon: l.icon,
+    fileColumn,
+    idCol: l.idCol || "ID",
+    keyColumn: l.keyColumn || DEFAULT_KEY_COLUMN,
+    floorColumn: l.floorColumn || fileColumn,
+    measureMode: l.measureMode || "count",
+    areaColumn: l.areaColumn,
+    columnAliases: l.columnAliases ?? {},
+    columnWidths: l.columnWidths ?? {},
+    items: occMigrated,
+    sourceFiles: l.sourceFiles ?? [],
+    createdAt: l.createdAt ?? Date.now(),
+    updatedAt: l.updatedAt ?? Date.now(),
   };
 }
