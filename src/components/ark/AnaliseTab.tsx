@@ -75,6 +75,7 @@ export function AnaliseTab() {
   const deleteGroupingPreset = useArk((s) => s.deleteGroupingPreset);
 
   const [page, setPage] = useState(0);
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState<Set<string>>(new Set());
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
