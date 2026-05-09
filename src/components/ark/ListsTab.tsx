@@ -42,6 +42,10 @@ import { PresentationView } from "@/components/ark/lists/PresentationView";
 import { ExportMenu } from "@/components/ark/lists/ExportMenu";
 import { ShareLinksDialog } from "@/components/ark/lists/ShareLinksDialog";
 import { ItemCommentsPopover } from "@/components/ark/lists/ItemCommentsPopover";
+import {
+  fetchOpenCommentSummaryByItem,
+  type ItemCommentSummary,
+} from "@/lib/comments";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 90;
@@ -276,12 +280,14 @@ function CategoryView({
   };
 
   const handleHeaderRename = (col: string) => {
-    if (col === list.keyColumn) {
-      toast.error("A coluna chave não pode ser renomeada");
-      return;
-    }
     const cur = list.columnAliases[col] || "";
-    const next = window.prompt(`Renomear coluna "${col}":`, cur);
+    const isKey = col === list.keyColumn;
+    const next = window.prompt(
+      isKey
+        ? `Renomear cabeçalho da coluna chave "${col}" (apenas máscara visual — o nome interno continua "${col}"):`
+        : `Renomear coluna "${col}":`,
+      cur,
+    );
     if (next === null) return;
     onSetAlias(col, next.trim());
   };
@@ -303,10 +309,25 @@ function CategoryView({
     if (!editing) return;
     onUpdateParam(editing.key, editing.col, editVal);
     setEditing(null);
+    toast.success("Atualizado");
   };
 
   const [confirmUndo, setConfirmUndo] = useState(false);
   const [shareScope, setShareScope] = useState<"all" | "category" | null>(null);
+  const [commentSummaries, setCommentSummaries] = useState<Map<string, ItemCommentSummary>>(
+    new Map(),
+  );
+
+  useEffect(() => {
+    if (!canComment) return;
+    let alive = true;
+    fetchOpenCommentSummaryByItem(list.id).then((m) => {
+      if (alive) setCommentSummaries(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canComment, list.id, list.updatedAt]);
 
   const toggle = (k: string) => {
     setExpanded((prev) => {
@@ -470,6 +491,7 @@ function CategoryView({
                   origin={list.keyColumn}
                   width={colWidth(list.keyColumn, KEY_COL_WIDTH)}
                   onResize={(w) => onSetWidth(list.keyColumn, w)}
+                  onRename={readOnly ? undefined : () => handleHeaderRename(list.keyColumn)}
                   bold
                 />
                 {allColumns.map((c) => (
@@ -556,14 +578,20 @@ function CategoryView({
                       </td>
                       <td className="p-1">
                         <div className="flex items-center justify-end gap-0.5">
-                          {canComment && (
-                            <ItemCommentsPopover
-                              listId={list.id}
-                              itemKey={i.key}
-                              canComment={canComment}
-                              canModerate={!readOnly}
-                            />
-                          )}
+                          {canComment && (() => {
+                            const sum = commentSummaries.get(i.key);
+                            return (
+                              <ItemCommentsPopover
+                                listId={list.id}
+                                itemKey={i.key}
+                                canComment={canComment}
+                                canModerate={!readOnly}
+                                initialOpenCount={sum?.count ?? 0}
+                                lastAuthorName={sum?.lastAuthorName ?? null}
+                                lastAuthorLabel={sum?.lastAuthorLabel ?? null}
+                              />
+                            );
+                          })()}
                           {!readOnly && (
                             <Button
                               size="icon"

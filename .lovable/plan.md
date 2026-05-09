@@ -1,180 +1,76 @@
-
-# Plano — Reestruturação ArkBIM
-
-Trabalho organizado em 6 blocos. Implementaremos em sequência, com migrations agrupadas no início para evitar quebras intermediárias.
+## Objetivo
+Cinco ajustes funcionais no ArkBIM + recurso de nome do projeto.
 
 ---
 
-## Bloco 1 — Banco de dados (1 migration consolidada)
+### 1. Renomear (mascarar) a coluna chave
+- Remover bloqueio em `handleHeaderRename` para a coluna chave (Master/Editor).
+- Alias funciona como **máscara**: nome original (`Type Mark`) continua sendo a chave interna; só o cabeçalho muda.
+- Aplicar alias também em Visão por Pavimento e nas exportações.
 
-### 1.1 Remover `visualizador`
-- Como Postgres não permite remover valor de enum em uso, criaremos novo enum `app_role_v2` (`master`,`coordenador`,`comentador`) e migraremos a coluna `user_roles.role`.
-- Linhas existentes com `visualizador` → convertidas para `comentador` (mais próximo) e log opcional.
+### 2. Edição de dados nos itens
+Manter edição inline por **duplo clique** (sem ícone de lápis). Apenas:
+- `Enter` salva, `Esc` cancela (já existe).
+- Toast discreto "Atualizado" no commit.
+- Coluna chave continua editável pelo lápis ao lado da chave.
 
-### 1.2 Etiqueta de usuário
-- Adicionar coluna `user_label text` em `profiles`.
+### 3. Link público no domínio `edise.ld.arkbim.com`
+- Criar `VITE_PUBLIC_SHARE_BASE_URL` (default `https://edise.ld.arkbim.com`).
+- `buildShareUrl` usa essa base sempre, ignorando `window.location.origin`.
+- Display truncado no diálogo (`edise.ld.arkbim.com/share/0ee6…481c`); copiar continua copiando link completo.
+- Nota: o login que aparece é só do preview do Lovable; no domínio publicado o link abre direto.
 
-### 1.3 Tabela `public_share_links`
-```
-id uuid pk, token text unique not null, list_id uuid null,
-scope text check in ('all','category'), expires_at timestamptz null,
-created_by uuid not null, is_active boolean default true,
-created_at timestamptz default now()
-```
-- RLS: SELECT/INSERT/UPDATE/DELETE só para `can_edit_lists(auth.uid())`.
-- Função `public.get_share_payload(_token text)` SECURITY DEFINER que retorna jsonb com `list_id`, `scope` e `data` filtrado da `component_lists` — chamada via `supabase.rpc` sem auth (GRANT EXECUTE TO anon, authenticated). Validações: `is_active`, `expires_at > now()`.
+### 4. Comentários — marcador, autor e central
+- **Marcador na linha**: pré-carregar contagens via `fetchOpenCommentsByItem(listId)`; ícone destacado + badge quando há comentários.
+- **Autor visível**: tooltip mostra "N comentários · último por <nome> (<etiqueta>)".
+- **Central de comentários (nova)**: aba/botão "Comentários" para Master/Editor. Lista todos os abertos agrupados por categoria, com autor + etiqueta, item, trecho, data e ações "Ir para item" / "Resolver" / "Remover".
+- Comentador continua só com a popover do próprio item.
 
-### 1.4 Tabela `item_comments`
-```
-id uuid pk, list_id uuid not null, item_key text not null,
-user_id uuid not null, text text not null,
-created_at timestamptz default now(),
-expires_at timestamptz default now() + interval '15 days',
-resolved_at timestamptz null, resolved_by uuid null
-```
-- RLS:
-  - SELECT: `is_approved(auth.uid())` e (não expirado OR `can_edit_lists`).
-  - INSERT: `can_comment(auth.uid())` e `user_id = auth.uid()`.
-  - UPDATE/DELETE: autor (próprio) OU `can_edit_lists` (resolver/excluir).
+### 5. Visão por pavimento — exportar LI por pavimento
+- Substituir "Copiar resumo" por **"Exportar LI (.xlsx)"** em `FloorView.tsx`.
+- Uma aba por categoria do pavimento selecionado, com chave (alias), parâmetros, quantidade no pavimento, arquivos e linha "Total".
+- Nome: `LI_<pavimento>_<YYYY-MM-DD>.xlsx`.
 
-### 1.5 RLS de `component_lists` — restringir DELETE ao Master
-- Trocar policy `lists_delete_owner_or_master` para apenas `is_master(auth.uid())`.
-- Manter UPDATE/INSERT para Master + Coordenador.
+### 6. Nome do projeto da lista consolidada (NOVO)
+Hoje a tela de Visualizador/Comentador e o link público mostram fixo "ArkBIM" no header. Vamos permitir que o Master defina um **Nome do projeto** que aparece nesse lugar.
 
-### 1.6 Auth — desabilitar reset por e-mail
-- Não há ajuste de DB (Supabase ainda aceita resetPasswordForEmail no dashboard); apenas removeremos do código.
+- Armazenar em `profiles` (do Master) um campo `project_name TEXT` (ou em uma nova tabela `app_settings` de linha única — escolho `app_settings` pra ser global ao workspace, não por usuário). Ver detalhe técnico abaixo.
+- Master edita o nome em **Usuários** (ou no header da home) através de um campo "Nome do projeto" com botão "Salvar".
+- O nome substitui o texto "ArkBIM" em:
+  - Header do `PresentationView` (modo apresentação para Visualizador/Comentador).
+  - Header da rota pública `/share/$token` (link compartilhado).
+  - Cabeçalho principal da home (acima de "Tabela pronta para análise"), opcional — confirmar.
+- Fallback: se não definido, mostra "ArkBIM".
+- Para o link público, expor o nome dentro de `get_share_payload` para o `share.$token` ler sem fazer query autenticada.
 
-### 1.7 Edge Function `admin-reset-password`
-- Deno function que valida JWT do chamador, confere `is_master` no DB, e usa `SUPABASE_SERVICE_ROLE_KEY` (server-side) para `auth.admin.updateUserById(id,{password})` + marcar `profiles.must_change_password = true`.
-- Adicionar coluna `must_change_password boolean default false` em `profiles`.
-
----
-
-## Bloco 2 — Auth e reset de senha
-
-- **Remover** botão "Esqueci minha senha", estado `forgotOpen`, função `sendReset` em `AuthForm.tsx`.
-- **Remover** rota `src/routes/reset-password.tsx`.
-- **Novo fluxo**: ao logar, se `profiles.must_change_password === true`, redirecionar para nova rota `/change-password` (formulário `supabase.auth.updateUser({password})` + marca `must_change_password=false`). Bloqueia o app até trocar.
-- **UsersPanel**: nova ação "Redefinir senha" (somente Master) → modal com campos "Nova senha" + botão "Gerar" (random 12 chars). Chama edge function via `supabase.functions.invoke('admin-reset-password', {...})`. Mostra a senha em texto + botão copiar.
+**Detalhe técnico:**
+- Nova tabela `public.app_settings` (singleton) com colunas `id uuid PK default gen_random_uuid()`, `project_name text`, `updated_at`, `updated_by uuid`.
+- RLS: `select` para qualquer usuário aprovado; `insert`/`update` apenas `is_master(auth.uid())`.
+- Atualizar a função `get_share_payload` para incluir `project_name` no JSON retornado.
+- Hook `useProjectName()` para componentes autenticados.
 
 ---
 
-## Bloco 3 — Permissões e UI por papel
+## Arquivos afetados
+- `src/components/ark/ListsTab.tsx` — destravar alias da chave; marcador de comentário; toast no commitEdit.
+- `src/components/ark/lists/ItemCommentsPopover.tsx` — `count`/`lastAuthor` para tooltip e destaque.
+- `src/components/ark/lists/CommentsCenter.tsx` (novo) — central de comentários.
+- `src/routes/index.tsx` — central, exibir nome do projeto.
+- `src/lib/share-links.ts` — base configurável.
+- `src/components/ark/lists/ShareLinksDialog.tsx` — display truncado + nota.
+- `src/components/ark/FloorView.tsx` — substituir resumo pela exportação XLSX.
+- `src/lib/comments.ts` — helper para listar comentários abertos de todas as listas.
+- `src/components/ark/lists/PresentationView.tsx` — usar nome do projeto no header.
+- `src/routes/share.$token.tsx` — usar nome do projeto vindo do payload RPC.
+- `src/components/admin/UsersPanel.tsx` (ou novo `ProjectSettings.tsx`) — campo "Nome do projeto" para Master.
+- `src/lib/project-settings.ts` (novo) — `useProjectName()` + setter.
 
-- `src/lib/permissions.ts`: remover `visualizador`. Tipos: `master | coordenador | comentador`.
-- `UsersPanel.tsx`:
-  - Remover opção "Visualizador" do `<Select>`.
-  - Coluna nova "Etiqueta" (input editável → update `profiles.user_label`).
-  - Botão "Redefinir senha" (apenas se viewer = master e linha != master/me).
-- `ListsTab.tsx` / `index.tsx`:
-  - `canEdit` (master|coordenador): edição de itens, criar/limpar/editar categoria, gerar share link.
-  - `canDeleteCategory` (somente master): botão "Excluir categoria" só visível p/ master.
-  - `canComment` (master|coord|comentador): vê e cria comentários.
-  - Comentador: modo de leitura igual ao visualizador anterior, mas com indicador de comentário e formulário inline.
+## Migration necessária (somente para item 6)
+- Criar tabela `app_settings` com RLS (select aprovado, write master only).
+- Atualizar `get_share_payload` para devolver `project_name`.
 
----
-
-## Bloco 4 — Link público de visualização
-
-- Botão "Compartilhar" em `CategoryView` (master/coord) → modal:
-  - Escopo: categoria atual / todas
-  - Validade: nunca / 7 / 30 dias
-  - Gera token (`crypto.randomUUID()` + base36) inserido em `public_share_links`
-  - Mostra URL `${origin}/share/{token}` + copiar
-  - Lista links existentes com toggle ativar/desativar e revogar
-- Nova rota pública `src/routes/share.$token.tsx`:
-  - Não usa `_authenticated`. Chama `supabase.rpc('get_share_payload', {token})`.
-  - Renderiza um `PresentationView` simplificado com: tabs de categorias permitidas, filtro por pavimento, "Copiar lista", "Copiar célula".
-  - Sem botões de export interno, sem sidebar admin, sem comentários.
-
----
-
-## Bloco 5 — Comentários, visão por pavimento e exportação
-
-### 5.1 Comentários
-- Hook `useItemComments(listId)` carrega comentários ativos (não expirados, não resolvidos) e expõe `add/resolve/delete`.
-- Em `CategoryView`: ícone `MessageSquare` com contador na coluna chave (linha do item). Click abre `Popover` com lista de comentários + textarea (se `canComment`). Master/Coord veem botão "Resolver" e "Excluir".
-- Comentador continua vendo a tabela em modo leitura, mas com ícone de comentário ativo na linha.
-
-### 5.2 Visão por pavimento
-- Toggle no topo do `ListsTab`: "Por categoria" | "Por pavimento".
-- Novo componente `FloorView`: select de pavimento → lista accordion: cada categoria com seus itens cujas occurrences contêm o pavimento (qtd recalculada).
-- Disponível para master/coord/comentador. No share público, exibido se escopo=`all`.
-
-### 5.3 Exportação reorganizada (`ExportMenu.tsx`)
-- DropdownMenu com dois grupos:
-  - **Por categoria**: atual XLSX, todas (uma aba cada), CSV atual.
-  - **Por pavimento**: pavimento atual, todos (uma aba por pavimento), matriz categoria × pavimento.
-- Helpers em `src/lib/export.ts` adicionar funções `exportFloorCurrent`, `exportFloorsAll`, `exportMatrix`.
-- Padronizar nomes: `ArkBIM - {Categoria} - categoria.xlsx`, `ArkBIM - {Pavimento} - consolidado.xlsx`, `ArkBIM - matriz categoria-pavimento.xlsx`.
-
----
-
-## Bloco 6 — UI das colunas e segurança final
-
-### 6.1 Larguras inteligentes
-- Em `CategoryView` e `PresentationView`:
-  - Ajustar defaults: ID/Type Mark 90px, Quantidade 80px, Modelo/Fabricante 160px, Descrição 320px (flex), URL 200px (truncate + tooltip).
-  - Substituir `truncate` por `whitespace-normal break-words` em descrição.
-  - `line-clamp-3` opcional em descrição no modo apresentação.
-  - Manter `table-layout: fixed` mas larguras heurísticas por nome de coluna (regex).
-
-### 6.2 Segurança
-- Confirmar que nenhum componente importa `client.server` ou usa `service_role`.
-- Edge function `admin-reset-password` é a única superfície privilegiada.
-- Revisão de RLS final via `supabase--linter`.
-- Garantir `handleSupabaseError` em todos os novos fluxos.
-
----
-
-## Detalhamento técnico
-
-**Arquivos a alterar**
-- `src/components/auth/AuthForm.tsx` (remove forgot)
-- `src/lib/permissions.ts` (remove visualizador)
-- `src/components/admin/UsersPanel.tsx` (etiqueta + reset senha)
-- `src/components/ark/ListsTab.tsx` (toggle visão, comentários, share, larguras)
-- `src/components/ark/lists/PresentationView.tsx` (larguras, sem export)
-- `src/components/ark/lists/ExportMenu.tsx` (reorganização)
-- `src/lib/export.ts` (novas funções)
-- `src/routes/index.tsx` (gates por papel + must_change_password)
-- `src/routes/__root.tsx` (rota /share não autenticada)
-
-**Arquivos a criar**
-- `src/routes/share.$token.tsx`
-- `src/routes/change-password.tsx`
-- `src/components/ark/comments/ItemCommentsPopover.tsx`
-- `src/components/ark/lists/FloorView.tsx`
-- `src/components/ark/lists/ShareLinksDialog.tsx`
-- `src/lib/comments.ts` (hook)
-- `src/lib/share-links.ts` (helpers)
-- `supabase/functions/admin-reset-password/index.ts`
-
-**Arquivos a remover**
-- `src/routes/reset-password.tsx`
-
-**Migrations**
-1. `*_role_visualizador_remove_share_comments.sql`:
-   - novo enum, migrate `user_roles.role`, drop antigo
-   - `profiles`: `user_label`, `must_change_password`
-   - tabelas `public_share_links`, `item_comments` + RLS
-   - função `get_share_payload`
-   - novo policy DELETE em `component_lists` (apenas master)
-
-**Novas tabelas**: `public_share_links`, `item_comments`.
-
-**Novas RLS** (resumo): `public_share_links_*` (apenas editores), `item_comments_*` (visíveis a aprovados, edição por autor/master/coord), `component_lists_delete_master_only`.
-
-**Edge function**: `admin-reset-password` (Master apenas).
-
----
-
-## Como testar cada perfil
-
-- **Master** (você): login → vê aba Usuários, pode aprovar, editar etiqueta, redefinir senha de outros, criar/excluir categorias, gerar share, comentar, resolver comentários.
-- **Coordenador (Editor)**: cria conta → master aprova e atribui role + etiqueta → consegue editar dados, criar/limpar listas, gerar share link, comentar, **não vê** botão "Excluir categoria".
-- **Comentador**: aprovado + role comentador → vê tabela em leitura, vê ícone de comentários por linha, pode adicionar comentário próprio, **não pode** editar/excluir/limpar/exportar configurações internas, mas pode "Copiar lista".
-- **Anônimo via /share/{token}**: abre URL → vê apenas a(s) categoria(s) autorizada(s), filtro por pavimento, copiar célula/lista, sem nenhum botão administrativo. Tokens expirados/desativados retornam mensagem amigável.
-- **Reset de senha**: master clica "Redefinir senha" do usuário X → recebe nova senha → comunica fora do sistema → X faz login → forçado a `/change-password` → define nova → entra normal.
-
-Confirma para eu implementar?
+## Como testar
+- **Master**: define "Edifício X" em Configurações; vê o nome aparecendo no header da apresentação e no link público.
+- **Visualizador/Comentador**: ao entrar, header mostra "Edifício X" no lugar de "ArkBIM".
+- **Link público**: header mostra "Edifício X" sem precisar de login.
+- Demais itens (1–5) testados como já descrito.

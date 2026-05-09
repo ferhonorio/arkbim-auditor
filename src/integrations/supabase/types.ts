@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          id: string
+          project_name: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          project_name?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          project_name?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       component_lists: {
         Row: {
           client_updated_at: string
