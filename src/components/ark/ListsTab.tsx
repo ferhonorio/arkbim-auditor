@@ -297,6 +297,26 @@ function CategoryView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onUndo}
+            disabled={!list.lastSnapshot}
+            title={
+              list.lastSnapshot
+                ? `Reverte ${list.lastSnapshot.summary.added} novo(s) / ${list.lastSnapshot.summary.updated} sobrescrito(s) — ${new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}`
+                : "Nada para desfazer"
+            }
+          >
+            <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer última
+          </Button>
+          <Button
+            size="sm"
+            variant={showFloorMap ? "default" : "outline"}
+            onClick={() => setShowFloorMap((v) => !v)}
+          >
+            <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
+          </Button>
           <Button size="sm" variant="outline" onClick={handleExport}>
             <Download className="mr-1 h-3.5 w-3.5" /> Exportar XLSX
           </Button>
@@ -308,6 +328,8 @@ function CategoryView({
           </Button>
         </div>
       </div>
+
+      {showFloorMap && <FloorMappingPanel list={list} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
