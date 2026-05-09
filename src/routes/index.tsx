@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { FileUploader } from "@/components/ark/FileUploader";
 import { FiltersPanel } from "@/components/ark/FiltersPanel";
 
@@ -12,6 +13,9 @@ import { ListsTab } from "@/components/ark/ListsTab";
 import { DiagnosticoTab } from "@/components/ark/DiagnosticoTab";
 import { useArk } from "@/lib/store";
 import { installGlobalErrorCapture } from "@/lib/diagnostics";
+import { useAuth } from "@/lib/auth";
+import { AuthForm } from "@/components/auth/AuthForm";
+import { useCloudSync } from "@/lib/cloud-sync";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,9 +34,29 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [collapsed, setCollapsed] = useState(false);
   const dataset = useArk((s) => s.dataset);
+  const { user, loading, signOut } = useAuth();
+  useCloudSync(user?.id ?? null);
+
   useEffect(() => {
     installGlobalErrorCapture();
   }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-sm text-muted-foreground">
+        Carregando…
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <Toaster richColors position="top-right" />
+        <AuthForm />
+      </>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
