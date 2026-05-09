@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FolderOpen, Copy } from "lucide-react";
+import { ChevronDown, ChevronRight, FolderOpen, Copy, FileSpreadsheet } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import type { ComponentList } from "@/lib/component-lists";
+import { exportXLSXStyled, type SheetSpec } from "@/lib/export";
 
 interface CategoryFloorAggregate {
   list: ComponentList;
