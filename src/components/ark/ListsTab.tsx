@@ -3,13 +3,13 @@ import {
   Plus,
   Trash2,
   Pencil,
-  Download,
   ChevronDown,
   ChevronRight,
   FolderOpen,
   Search as SearchIcon,
   Undo2,
   Map as MapIcon,
+  Presentation,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -22,11 +22,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { exportXLSX } from "@/lib/export";
 import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
-import type { Row } from "@/lib/parse";
 import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
+import { PresentationView } from "@/components/ark/lists/PresentationView";
+import { ExportMenu } from "@/components/ark/lists/ExportMenu";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
@@ -48,6 +58,7 @@ export function ListsTab() {
   const undoLast = useArk((s) => s.undoLastConsolidation);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
+  const [presentation, setPresentation] = useState(false);
 
   const handleCreate = () => {
     const name = window.prompt(
@@ -57,6 +68,18 @@ export function ListsTab() {
     createList(name.trim());
     toast.success(`Categoria "${name.trim()}" criada com defaults (Type Mark / Nome do arquivo / por item)`);
   };
+
+  if (presentation) {
+    return (
+      <div className="flex h-[calc(100vh-160px)] flex-col gap-4 overflow-auto">
+        <PresentationView
+          lists={lists}
+          initialId={active?.id}
+          onClose={() => setPresentation(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-160px)] gap-4">
@@ -107,6 +130,8 @@ export function ListsTab() {
         ) : (
           <CategoryView
             list={active}
+            allLists={lists}
+            onPresent={() => setPresentation(true)}
             onRename={(name) => renameList(active.id, name)}
             onDelete={() => {
               if (window.confirm(`Excluir categoria "${active.name}"?`)) {
@@ -144,6 +169,8 @@ export function ListsTab() {
 
 function CategoryView({
   list,
+  allLists,
+  onPresent,
   onRename,
   onDelete,
   onClear,
@@ -155,6 +182,8 @@ function CategoryView({
   onUndo,
 }: {
   list: ComponentList;
+  allLists: ComponentList[];
+  onPresent: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
   onClear: () => void;
@@ -246,26 +275,7 @@ function CategoryView({
     setEditing(null);
   };
 
-  const handleExport = () => {
-    if (!filteredItems.length) return toast.error("Nada para exportar");
-    const rows: Row[] = filteredItems.map((i) => {
-      const r: Row = { [list.keyColumn]: i.key } as Row;
-      for (const c of allColumns) r[c] = i.params[c] ?? "";
-      r[`Total (${unit})`] = String(i.totalQuantity);
-      // breakdown by floor
-      const byFloor = new Map<string, number>();
-      for (const o of i.occurrences) byFloor.set(o.floor, (byFloor.get(o.floor) ?? 0) + o.quantity);
-      r["Pavimentos"] = Array.from(byFloor, ([f, q]) => `${f} (${fmtQty(q)})`).join(" · ");
-      return r;
-    });
-    exportXLSX(`${list.name}.xlsx`, [
-      {
-        name: list.name.slice(0, 28),
-        rows,
-        columns: [list.keyColumn, ...allColumns, `Total (${unit})`, "Pavimentos"],
-      },
-    ]);
-  };
+  const [confirmUndo, setConfirmUndo] = useState(false);
 
   const toggle = (k: string) => {
     setExpanded((prev) => {
@@ -300,7 +310,14 @@ function CategoryView({
           <Button
             size="sm"
             variant="outline"
-            onClick={onUndo}
+            onClick={onPresent}
+          >
+            <Presentation className="mr-1 h-3.5 w-3.5" /> Modo apresentação
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmUndo(true)}
             disabled={!list.lastSnapshot}
             title={
               list.lastSnapshot
@@ -317,9 +334,16 @@ function CategoryView({
           >
             <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
           </Button>
-          <Button size="sm" variant="outline" onClick={handleExport}>
-            <Download className="mr-1 h-3.5 w-3.5" /> Exportar XLSX
-          </Button>
+          <ExportMenu
+            list={list}
+            allLists={allLists}
+            filteredItems={filteredItems}
+            totalForItem={(i) => {
+              if (floor === "__all__") return i.totalQuantity;
+              const occs = i.occurrences.filter((o) => o.floor === floor);
+              return Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
+            }}
+          />
           <Button size="sm" variant="outline" onClick={onClear}>
             Limpar lista
           </Button>
@@ -493,6 +517,41 @@ function CategoryView({
           </table>
         </div>
       )}
+
+      <AlertDialog open={confirmUndo} onOpenChange={setConfirmUndo}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer última consolidação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Categoria <strong>{list.name}</strong>.{" "}
+              {list.lastSnapshot ? (
+                <>
+                  Reverte {list.lastSnapshot.summary.added} novo(s),{" "}
+                  {list.lastSnapshot.summary.updated} sobrescrito(s),{" "}
+                  {list.lastSnapshot.summary.skipped} mantido(s) — salvo em{" "}
+                  {new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}.
+                </>
+              ) : null}
+              <br />
+              <strong className="text-destructive">
+                Esta ação não pode ser revertida.
+              </strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                onUndo();
+                setConfirmUndo(false);
+              }}
+            >
+              Sim, desfazer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

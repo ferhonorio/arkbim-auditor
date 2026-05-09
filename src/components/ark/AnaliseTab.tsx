@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as InfoIcon } from "lucide-react";
+import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as InfoIcon, ChevronDown } from "lucide-react";
 import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
   applyFilters,
@@ -31,6 +31,12 @@ import { exportXLSX } from "@/lib/export";
 import { ConsolidateAction } from "@/components/ark/lists/ConsolidateAction";
 import { ResolveInconsistenciesDialog } from "@/components/ark/lists/ResolveInconsistenciesDialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { DEFAULT_KEY_COLUMN, DEFAULT_FLOOR_COLUMN } from "@/lib/component-lists";
 
@@ -579,6 +585,20 @@ export function AnaliseTab() {
               defaultFloorColumn={quickFloor}
               onConsolidated={() => setSelectedGroupKeys(new Set())}
             />
+            {selectedGroupKeys.size > 0 && (
+              <div className="flex items-center gap-1 rounded-md border bg-primary/5 px-2 py-1 text-[11px]">
+                <span>
+                  <strong>{selectedGroupKeys.size}</strong> de {groups.length} grupos selecionados
+                </span>
+                <button
+                  type="button"
+                  className="text-primary underline"
+                  onClick={() => setSelectedGroupKeys(new Set())}
+                >
+                  limpar
+                </button>
+              </div>
+            )}
           </div>
         }
       >
@@ -662,20 +682,74 @@ export function AnaliseTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-8">
-                  <Checkbox
-                    checked={
-                      pageGroups.length > 0 &&
-                      pageGroups.every((g) => selectedGroupKeys.has(g.key))
-                    }
-                    onCheckedChange={(v) => {
-                      const next = new Set(selectedGroupKeys);
-                      if (v) pageGroups.forEach((g) => next.add(g.key));
-                      else pageGroups.forEach((g) => next.delete(g.key));
-                      setSelectedGroupKeys(next);
-                    }}
-                    aria-label="Selecionar página"
-                  />
+                <TableHead className="w-16">
+                  <div className="flex items-center gap-1">
+                    <Checkbox
+                      checked={
+                        groups.length > 0 &&
+                        groups.every((g) => selectedGroupKeys.has(g.key))
+                          ? true
+                          : groups.some((g) => selectedGroupKeys.has(g.key))
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={(v) => {
+                        if (v) {
+                          setSelectedGroupKeys(new Set(groups.map((g) => g.key)));
+                        } else {
+                          setSelectedGroupKeys(new Set());
+                        }
+                      }}
+                      aria-label="Selecionar todos os filtrados"
+                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5"
+                          aria-label="Opções de seleção"
+                        >
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-64">
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setSelectedGroupKeys(new Set(groups.map((g) => g.key)))
+                          }
+                        >
+                          Selecionar todos os filtrados ({groups.length})
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const next = new Set(selectedGroupKeys);
+                            pageGroups.forEach((g) => next.add(g.key));
+                            setSelectedGroupKeys(next);
+                          }}
+                        >
+                          Selecionar apenas esta página ({pageGroups.length})
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const next = new Set<string>();
+                            for (const g of groups) {
+                              if (!selectedGroupKeys.has(g.key)) next.add(g.key);
+                            }
+                            setSelectedGroupKeys(next);
+                          }}
+                        >
+                          Inverter seleção
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setSelectedGroupKeys(new Set())}
+                          disabled={selectedGroupKeys.size === 0}
+                        >
+                          Limpar seleção
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TableHead>
                 {groupVisible.map((c) => (
                   <TableHead key={c}>{c}</TableHead>
