@@ -543,19 +543,29 @@ function CategoryView({
                         {fmtQty(i.totalQuantity)}
                       </td>
                       <td className="p-1">
-                        {!readOnly && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-destructive"
-                            onClick={() => {
-                              if (window.confirm(`Remover "${i.key}" da lista?`))
-                                onRemoveItem(i.key);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-0.5">
+                          {canComment && (
+                            <ItemCommentsPopover
+                              listId={list.id}
+                              itemKey={i.key}
+                              canComment={canComment}
+                              canModerate={!readOnly}
+                            />
+                          )}
+                          {!readOnly && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 text-destructive"
+                              onClick={() => {
+                                if (window.confirm(`Remover "${i.key}" da lista?`))
+                                  onRemoveItem(i.key);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {open && (
