@@ -93,7 +93,7 @@ export function FloorView() {
     if (!aggregates.length) return;
     const sheets: SheetSpec[] = aggregates.map((a) => {
       const unit = a.list.measureMode === "area" ? "m²" : "un";
-      const keyHeader = (a.list.headerAliases?.[a.list.keyColumn] ?? a.list.keyColumn) || a.list.keyColumn;
+      const keyHeader = (a.list.columnAliases?.[a.list.keyColumn] ?? a.list.keyColumn) || a.list.keyColumn;
       const qtyHeader = `Quantidade (${unit})`;
       const filesHeader = "Arquivos";
       const rows = a.items.map((it) => ({
