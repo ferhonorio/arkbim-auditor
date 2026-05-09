@@ -8,6 +8,8 @@ import {
   ChevronRight,
   FolderOpen,
   Search as SearchIcon,
+  Undo2,
+  Map as MapIcon,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ import { toast } from "sonner";
 import { exportXLSX } from "@/lib/export";
 import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
 import type { Row } from "@/lib/parse";
+import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
