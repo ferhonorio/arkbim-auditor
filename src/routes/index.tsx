@@ -20,6 +20,7 @@ import { PendingApproval } from "@/components/auth/PendingApproval";
 import { useCloudSync } from "@/lib/cloud-sync";
 import { usePermissions } from "@/lib/permissions";
 import { UsersPanel } from "@/components/admin/UsersPanel";
+import { FloorView } from "@/components/ark/FloorView";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -161,6 +162,7 @@ function Index() {
             <TabsList>
               {canEdit && <TabsTrigger value="analise">Analise e agrupamento</TabsTrigger>}
               <TabsTrigger value="consolidada">Listas consolidadas</TabsTrigger>
+              <TabsTrigger value="pavimento">Por pavimento</TabsTrigger>
               {canEdit && <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>}
               {canEdit && <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>}
               {isMaster && <TabsTrigger value="usuarios">Usuários</TabsTrigger>}
@@ -172,6 +174,9 @@ function Index() {
             )}
             <TabsContent value="consolidada" className="mt-4">
               <ListsTab readOnly={!canEdit} canComment={perms.canComment} />
+            </TabsContent>
+            <TabsContent value="pavimento" className="mt-4">
+              <FloorView />
             </TabsContent>
             {canEdit && (
               <TabsContent value="auditoria" className="mt-4">
