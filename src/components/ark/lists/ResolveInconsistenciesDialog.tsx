@@ -32,14 +32,19 @@ interface Variant {
   count: number;
 }
 
-export function ResolveInconsistenciesDialog({ open, onOpenChange, rule }: Props) {
+export function ResolveInconsistenciesDialog({ open, onOpenChange, rule, rows, scopeLabel }: Props) {
   const dataset = useArk((s) => s.dataset);
   const apply = useArk((s) => s.applyDatasetResolutions);
 
+  const scopedRows = useMemo<Row[]>(
+    () => rows ?? dataset?.rows ?? [],
+    [rows, dataset],
+  );
+
   const evals = useMemo(() => {
-    if (!dataset) return new Map<string, RuleKeyEval>();
-    return evaluateRule(rule, dataset.rows);
-  }, [dataset, rule]);
+    if (!scopedRows.length) return new Map<string, RuleKeyEval>();
+    return evaluateRule(rule, scopedRows);
+  }, [scopedRows, rule]);
 
   const inconsistentKeys = useMemo(
     () => Array.from(evals.entries()).filter(([, ev]) => ev.comparable && ev.inconsistent),
