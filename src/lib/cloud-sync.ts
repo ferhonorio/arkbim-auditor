@@ -68,7 +68,7 @@ export function useCloudSync(userId: string | null) {
             id: l.id,
             user_id: userId,
             name: l.name,
-            data: l as unknown as Record<string, unknown>,
+            data: l as unknown as never,
             client_updated_at: new Date(l.updatedAt).toISOString(),
           })),
         );
@@ -137,7 +137,7 @@ export function useCloudSync(userId: string | null) {
             id: l.id,
             user_id: userId,
             name: l.name,
-            data: l as unknown as Record<string, unknown>,
+            data: l as unknown as never,
             client_updated_at: new Date(l.updatedAt).toISOString(),
           })),
         );
