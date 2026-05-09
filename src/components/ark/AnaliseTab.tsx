@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { exportXLSX } from "@/lib/export";
+import { ConsolidateAction } from "@/components/ark/lists/ConsolidateAction";
 import { toast } from "sonner";
 
 const RULE_COLORS = ["#fee2e2", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#ffedd5"];
@@ -505,6 +506,10 @@ export function AnaliseTab() {
             <Button size="sm" variant="outline" onClick={exportFiltered}>
               Exportar filtrado
             </Button>
+            <ConsolidateAction
+              rows={ruleFiltered}
+              columns={Array.from(new Set([...groupBy, ...concatCols]))}
+            />
           </div>
         }
       >
