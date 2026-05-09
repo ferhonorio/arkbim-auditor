@@ -448,7 +448,7 @@ function CategoryView({
                 <col key={c} style={{ width: colWidth(c) }} />
               ))}
               <col style={{ width: colWidth("__qty__", QTY_COL_WIDTH) }} />
-              <col style={{ width: 32 }} />
+              <col style={{ width: 72 }} />
             </colgroup>
             <thead className="border-b">
               <tr>
