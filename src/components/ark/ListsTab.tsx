@@ -473,6 +473,7 @@ function CategoryView({
                   origin={list.keyColumn}
                   width={colWidth(list.keyColumn, KEY_COL_WIDTH)}
                   onResize={(w) => onSetWidth(list.keyColumn, w)}
+                  onRename={readOnly ? undefined : () => handleHeaderRename(list.keyColumn)}
                   bold
                 />
                 {allColumns.map((c) => (
