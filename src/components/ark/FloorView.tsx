@@ -89,6 +89,35 @@ export function FloorView() {
     }
   };
 
+  const exportLI = () => {
+    if (!aggregates.length) return;
+    const sheets: SheetSpec[] = aggregates.map((a) => {
+      const unit = a.list.measureMode === "area" ? "m²" : "un";
+      const keyHeader = (a.list.headerAliases?.[a.list.keyColumn] ?? a.list.keyColumn) || a.list.keyColumn;
+      const qtyHeader = `Quantidade (${unit})`;
+      const filesHeader = "Arquivos";
+      const rows = a.items.map((it) => ({
+        [keyHeader]: it.key,
+        [qtyHeader]: Number(it.quantity.toFixed(2)),
+        [filesHeader]: it.files.map((f) => `${f.file} (${fmtQty(a.list, f.quantity)})`).join(" · "),
+      }));
+      const footer = {
+        [keyHeader]: "Total",
+        [qtyHeader]: Number(a.total.toFixed(2)),
+        [filesHeader]: "",
+      };
+      return { name: a.list.name, rows, columns: [keyHeader, qtyHeader, filesHeader], footer };
+    });
+    const safeFloor = floor.replace(/[\\/?*[\]:]/g, "-");
+    const date = new Date().toISOString().slice(0, 10);
+    try {
+      exportXLSXStyled(`LI_${safeFloor}_${date}.xlsx`, sheets);
+      toast.success("LI exportada");
+    } catch {
+      toast.error("Falha ao exportar LI");
+    }
+  };
+
   if (allFloors.length === 0) {
     return (
       <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
