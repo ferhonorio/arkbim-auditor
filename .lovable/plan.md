@@ -1,106 +1,91 @@
 ## Objetivo
 
-Tornar a consolidação flexível e robusta: chave configurável, subgrupos por pavimento, modo quantidade vs. área, seleção por checkbox e colunas redimensionáveis.
+Tornar o ciclo de consolidação mais flexível e seguro: definir/sobrescrever esquema (chave + pavimento) na hora de consolidar, mapear nomes de pavimentos a partir do arquivo, renomear colunas/itens na lista, conferir associação de colunas antes de gravar, desfazer a última consolidação e resolver inconsistências antes de consolidar.
 
-## 1. Chave configurável (não mais hardcoded "Type Mark")
+---
+
+## 1. Painel "Esquema da consolidação" ao lado do botão Consolidar
+
+`src/components/ark/AnaliseTab.tsx` + `ConsolidateAction.tsx`
+- Ao lado do botão **Consolidar** mostrar dois selects compactos: **Coluna chave** e **Coluna de pavimento**, populados com `dataset.columns`. Defaults inteligentes: "Type Mark" / "Marca de Tipo" / primeira; "Nome do arquivo" / "Pavimento" / primeira.
+- Ao escolher categoria existente no diálogo, os selects aparecem **pré-preenchidos com o esquema da categoria** mas **editáveis**. Se o usuário alterar, marcar checkbox "Atualizar esquema da categoria" (default off → consolidar uma vez com esquema novo; on → grava `keyColumn`/`floorColumn` na categoria via `updateComponentList`).
+- Para nova categoria, o diálogo já recebe esses valores em vez de exigir reseleção.
+- Validação: ambos precisam existir em `dataset.columns` — toast de erro caso contrário.
+
+## 2. Mapeamento "arquivo → nome do pavimento"
+
+Novo conceito `floorAliases: Record<string, string>` por categoria (ex.: `"MO-0101.00-8210-190-NGX-0000.rvt"` → `"PAVIMENTO TÉRREO"`).
 
 `src/lib/component-lists.ts`
-- Remover `KEY_COLUMN` constante. `ComponentList` ganha `keyColumn: string` (default "Type Mark", mas editável).
-- `planConsolidation(rows, columns, list, opts)` passa a ler `list.keyColumn`.
-- Migração no `persist.onRehydrate`: listas antigas recebem `keyColumn = "Type Mark"`.
+- `ComponentList` ganha `floorAliases?: Record<string, string>`.
+- Em `planConsolidation`, ao calcular `floor`, aplicar: `floor = list.floorAliases?.[rawFromFloorCol] ?? rawFromFloorCol`. Assim a regra serve para qualquer coluna escolhida como pavimento (não só "Nome do arquivo").
+- `migrateComponentList` inicializa `floorAliases: {}`.
 
-`AnaliseTab` / `ConsolidateAction.tsx`
-- No diálogo de consolidação, primeiro passo: **Selecionar coluna chave** (Select com `dataset.columns`, default = "Type Mark" se existir, senão "Marca de Tipo", senão primeira). Para listas existentes, o valor é travado (mostra qual é) e só pode ser trocado em "Editar categoria".
-- Validação: a coluna escolhida precisa existir nas linhas filtradas; senão toast de erro.
+UI: nova aba/expansor **"Pavimentos"** em `ListsTab` (CategoryView) listando todos os valores distintos da `floorColumn` já vistos em `occurrences` + valores presentes no dataset atual. Cada linha: `valor original → input "Nome amigável"`. Salvar via `updateComponentList`. Botão "Aplicar agora" reescreve os `occurrences.floor` existentes usando o novo mapa (recalculo simples no store).
 
-## 2. Subgrupos por pavimento (coluna configurável)
+Também expor um link "Mapear pavimentos" no diálogo de consolidação após detectar pavimentos novos no preview.
 
-`ComponentList` ganha `floorColumn: string` (default = `fileColumn` = "Nome do arquivo"). Pode ser qualquer coluna do dataset (ex.: "Level", "Pavimento").
+## 3. Renomear colunas e células na lista consolidada
 
-`ConsolidatedItem` — o agregado por pavimento já existe via `occurrences`, mas hoje a chave é `file`. Reestruturar:
+`src/components/ark/ListsTab.tsx`
+- **Headers (já existe via `setColumnAlias`)**: manter, mas **bloquear** o rename do header da `keyColumn` (botão de renomear oculto/desabilitado quando `col === list.keyColumn`).
+- **Células da coluna chave**: read-only.
+- **Demais células**: duplo-clique troca para `<Input>` inline; on blur/Enter salva via novo action `updateItemParam(listId, key, column, value)`. Atualiza `item.params[col]` e `item.lastUpdatedAt`.
+- **Renomear o valor da chave** (caso o usuário queira corrigir typo de Type Mark): permitir só por menu de contexto explícito ("Renomear chave…") com confirmação, pois isso muda `item.key`. Action `renameItemKey(listId, oldKey, newKey)`: rejeita se `newKey` já existe (toast); senão atualiza chave e timestamps.
 
-```text
-occurrences: Array<{
-  floor: string;          // valor da floorColumn
-  file: string;           // arquivo de origem (referência)
-  quantity: number;       // contagem OU soma de área
-  ids: string[];
-}>
-```
+## 4. Verificação de associação de colunas antes de gravar
 
-Acumulação em `commitConsolidation`: chave do mapa = `floor|file` para preservar histórico de re-consolidações do mesmo pavimento vindo de arquivo diferente.
+`ConsolidateAction.tsx` — entre `planConsolidation` e o commit, abrir um diálogo intermediário **"Conferir mapeamento"** quando a categoria já tem itens E o dataset traz colunas novas/diferentes:
+- Tabela: `Coluna do dataset` ↔ `Coluna na lista` (Select com colunas já presentes em `list.items[*].columns` + opção "(criar nova)" + opção "(ignorar)").
+- Sugestão automática por nome igual / case-insensitive / aliases conhecidos.
+- Aplicado via remap das chaves de `params` dentro do `plan.preview` antes de chamar `applyConsolidation`.
+- Se não houver colunas novas/divergentes, pular o passo silenciosamente.
 
-`ListsTab` (`CategoryTable`)
-- Linha expansível agrupa `occurrences` por `floor` → mostra subtotal por pavimento e arquivos contribuintes.
-- Filtro lateral "Pavimento" passa a filtrar pela `floorColumn`.
+## 5. Desfazer última consolidação
 
-No diálogo de consolidação: Select "Coluna de pavimento" (default "Nome do arquivo"). Travado para listas já existentes (editável em "Editar categoria").
+`src/lib/store.ts`
+- Em `applyConsolidation`, antes do `commit`, salvar snapshot na própria lista: `lastSnapshot?: { items, sourceFiles, savedAt, summary: { added, updated, skipped } }`. Apenas o último (sem histórico).
+- Novo action `undoLastConsolidation(listId)` que restaura `items`/`sourceFiles` a partir de `lastSnapshot` e limpa o snapshot.
+- `migrateComponentList` aceita `lastSnapshot` opcional.
 
-## 3. Modo de quantificação: por item vs. por área
+UI em `ListsTab` (CategoryView, header da categoria): botão **"Desfazer última consolidação"** com tooltip mostrando `summary` e `savedAt`. Disabled se `!lastSnapshot`. Toast confirmando reversão.
 
-`ComponentList` ganha:
-- `measureMode: "count" | "area"` (default `"count"`)
-- `areaColumn?: string` — exigido quando `measureMode = "area"`
-- `unit: "un" | "m²"` derivada do modo
+## 6. Resolver inconsistências no painel de agrupamento
 
-`planConsolidation`:
-- `count`: `quantity = grupo.length` (comportamento atual).
-- `area`: `quantity = soma de Number(parseLocaleNumber(r[areaColumn]))` por pavimento. Linhas com área inválida/zero são contadas em `invalidRows` separadamente (`invalidArea`). Helper `parseLocaleNumber` aceita `"1.234,56"` e `"1234.56"`.
-
-`ConsolidateAction.tsx` — adicionar no diálogo:
-```text
-Modo: ( ) Por item   ( ) Por área (m²)
-   └─ se "Por área": Select "Coluna de área" (numérica)
-```
-
-Mostrar no preview a unidade correta (`un` / `m²`) e total agregado.
-
-`CategoryTable` — coluna "Qtd" vira "Qtd (un)" ou "Área (m²)" conforme `measureMode`. Subtotais por pavimento idem. Exportação XLSX inclui a unidade no header.
-
-Mudar `measureMode` ou `areaColumn` em uma lista existente: bloquear (toast: "para alterar o modo, crie nova categoria") — evita misturar unidades.
-
-## 4. Seleção por checkbox antes de consolidar
-
-`AnaliseTab`
-- Adicionar coluna fixa de checkbox no início da tabela de resultados filtrados.
-- Cabeçalho com checkbox "selecionar todos / página".
-- Estado `selectedRowIds: Set<string>` no slice do AnaliseTab (chave = `idCol` da linha).
-- Botão "Consolidar dados filtrados" passa a usar:
-  - se houver seleção → apenas linhas selecionadas;
-  - se nada selecionado → todas as linhas filtradas (comportamento atual), com hint no botão ("3 selecionados" / "todos os 248 filtrados").
-- `ConsolidateAction` recebe `rows` já resolvidas conforme regra acima.
-- Limpar seleção após consolidação bem-sucedida.
-
-## 5. Colunas redimensionáveis na ListsTab
-
-`CategoryTable` (e opcionalmente na pré-visualização do AnaliseTab)
-- Implementar resize manual sem libs externas: handle `<div>` absoluto na borda direita de cada `<th>`, drag atualiza `colWidths: Record<string, number>` mantido em estado local + persistido por categoria em `ComponentList.columnWidths: Record<string, number>`.
-- `<table>` com `table-layout: fixed`; cada `<th>`/`<td>` recebe `style={{ width: colWidths[col] ?? defaultWidth }}`.
-- Duplo-clique no handle = auto-fit (largura do header + 24px).
-- Persistência via Zustand `persist` (já em uso).
+`src/components/ark/AnaliseTab.tsx`
+- Para cada **regra visual** com `applyWhen="inconsistent"`, agregar os grupos cujas chaves estão em `badKeysPerRule[i]`. Botão por regra: **"Resolver inconsistências (N)"** abre um diálogo `ResolveInconsistenciesDialog` (novo arquivo `src/components/ark/lists/ResolveInconsistenciesDialog.tsx`).
+- Diálogo: lista de chaves divergentes; cada chave expande para mostrar, por `compareColumn` divergente, os valores observados (com contagem de linhas) + radio "verdadeiro" + campo livre "outro valor". Botão "Aplicar a todas as linhas dessa chave".
+- Aplicação: novo action `applyResolutions(resolutions)` no store que muta `dataset.rows` — para cada `(key, col, value)`, percorre as linhas onde a chave bate (usando `keyColumns` da regra) e seta `r[col] = value`. Marca `dataset.updatedAt`.
+- Após resolver, as regras revaliam automaticamente (memos). Toast com contagem de linhas atualizadas.
+- Atalho: a partir do diálogo, botão "Consolidar agora" reaproveita o fluxo existente.
 
 ## Arquivos afetados
 
 Modificados:
-- `src/lib/component-lists.ts` — novos campos (`keyColumn`, `floorColumn`, `measureMode`, `areaColumn`), ocurrences com `floor`, `parseLocaleNumber`, plan/commit ajustados.
-- `src/lib/store.ts` — actions: `createComponentList(opts)`, `updateListSchema(listId, partial)`, `setSelectedRows`, `clearSelection`. Migração no rehydrate.
-- `src/components/ark/AnaliseTab.tsx` — coluna de checkbox, contador de seleção, passa rows resolvidas para ConsolidateAction.
-- `src/components/ark/lists/ConsolidateAction.tsx` — diálogo com 3 novos campos (chave, pavimento, modo+coluna de área) ao criar categoria; ao consolidar em existente mostra-os como read-only.
-- `src/components/ark/ListsTab.tsx` — subgrupos por pavimento na linha expansível, unidade dinâmica, filtro por pavimento usa `floorColumn`.
-- Novo: `src/components/ark/lists/ResizableTable.tsx` (ou hook `useColumnResize`) reutilizável.
+- `src/lib/component-lists.ts` — `floorAliases`, plan aplica alias no `floor`, `migrateComponentList`.
+- `src/lib/store.ts` — `lastSnapshot` + `undoLastConsolidation`, `updateItemParam`, `renameItemKey`, `applyResolutions`, persistência de `floorAliases`.
+- `src/components/ark/AnaliseTab.tsx` — selects de chave/pavimento ao lado do Consolidar; botão "Resolver inconsistências" por regra.
+- `src/components/ark/lists/ConsolidateAction.tsx` — esquema editável + checkbox "atualizar esquema", passo "Conferir mapeamento", link "Mapear pavimentos".
+- `src/components/ark/ListsTab.tsx` — bloqueio do rename na key column, edição inline de células, rename de key via menu, painel de mapeamento de pavimentos, botão "Desfazer última consolidação".
+
+Novos:
+- `src/components/ark/lists/FloorMappingPanel.tsx` — gerencia `floorAliases`.
+- `src/components/ark/lists/ColumnMappingDialog.tsx` — passo "Conferir mapeamento".
+- `src/components/ark/lists/ResolveInconsistenciesDialog.tsx` — fluxo do item 6.
 
 ## Regras-chave
 
-- Listas existentes mantêm: `keyColumn="Type Mark"`, `floorColumn="Nome do arquivo"`, `measureMode="count"`. Tudo retrocompatível.
-- Modo (`count`/`area`) e `keyColumn` são definidos na criação da categoria e travados depois (muda → cria nova categoria).
-- `floorColumn` pode ser editado posteriormente (re-agrupa `occurrences` na próxima consolidação).
-- Seleção zero = consolida todos os filtrados (sem fricção quando o usuário só quer tudo).
-- Larguras de coluna persistidas por categoria.
+- Esquema da categoria continua persistente, mas pode ser sobrescrito a cada consolidação (opt-in para gravar).
+- `floorAliases` é puro mapeamento de exibição/agrupamento, não muda o `file` original.
+- Edição inline nunca toca a `keyColumn` (exceto via "Renomear chave" explícito).
+- Undo cobre só a última operação, sem histórico — mensagem clara.
+- Resolução de inconsistência altera o dataset em memória; o usuário ainda decide quando consolidar.
 
 ## Validação manual
 
-1. Subir arquivo com coluna "Marca de Tipo" (português) → criar categoria escolhendo essa coluna como chave → confirmar consolidação.
-2. Criar categoria "Pisos" com modo "área" e coluna "Área" → conferir que totais por pavimento somam em m².
-3. Marcar 3 linhas via checkbox → "Consolidar" deve mostrar "3 selecionados" e gravar só esses.
-4. Expandir item na ListsTab → ver subtotais por pavimento.
-5. Arrastar borda da coluna → largura persiste após reload.
+1. Trocar "Coluna chave" no botão Consolidar para "Marca de Tipo" sem editar a categoria → consolida uma vez; ativar checkbox → categoria passa a usar "Marca de Tipo".
+2. Mapear `MO-0101...rvt` → `PAVIMENTO TÉRREO`; reabrir lista → subgrupos mostram nome amigável.
+3. Duplo-clique numa célula de "Description" → editar → persiste; tentar editar célula da chave → bloqueado.
+4. Subir arquivo com coluna "Descrição" em vez de "Description" → diálogo de mapeamento sugere a associação.
+5. Consolidar; clicar "Desfazer" → lista volta exatamente ao estado anterior.
+6. Em uma regra com 5 chaves divergentes em "Manufacturer" → escolher valor verdadeiro por chave → as linhas são atualizadas e a regra deixa de acender.
