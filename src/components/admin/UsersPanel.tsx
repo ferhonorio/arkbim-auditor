@@ -12,6 +12,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Check, X, RefreshCw } from "lucide-react";
+import { handleSupabaseError } from "@/lib/error-handling";
 
 type AssignableRole = "coordenador" | "comentador" | "visualizador";
 
