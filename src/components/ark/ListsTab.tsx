@@ -12,6 +12,7 @@ import {
   Presentation,
   Copy,
   Check,
+  Share2,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
 import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
 import { PresentationView } from "@/components/ark/lists/PresentationView";
 import { ExportMenu } from "@/components/ark/lists/ExportMenu";
+import { ShareLinksDialog } from "@/components/ark/lists/ShareLinksDialog";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
@@ -285,6 +287,7 @@ function CategoryView({
   };
 
   const [confirmUndo, setConfirmUndo] = useState(false);
+  const [shareScope, setShareScope] = useState<"all" | "category" | null>(null);
 
   const toggle = (k: string) => {
     setExpanded((prev) => {
@@ -325,6 +328,26 @@ function CategoryView({
           >
             <Presentation className="mr-1 h-3.5 w-3.5" /> Modo apresentação
           </Button>
+          {!readOnly && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShareScope("category")}
+                title="Gerar link público desta categoria"
+              >
+                <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShareScope("all")}
+                title="Gerar link público de todas as listas"
+              >
+                <Share2 className="mr-1 h-3.5 w-3.5" /> Compartilhar tudo
+              </Button>
+            </>
+          )}
           {!readOnly && (
             <Button
               size="sm"
