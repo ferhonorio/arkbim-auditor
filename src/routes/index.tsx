@@ -23,7 +23,6 @@ import { UsersPanel } from "@/components/admin/UsersPanel";
 import { FloorView } from "@/components/ark/FloorView";
 import { CommentsCenter } from "@/components/ark/lists/CommentsCenter";
 import { useProjectName } from "@/lib/project-settings";
-import { useArk } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -41,10 +40,13 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [collapsed, setCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const dataset = useArk((s) => s.dataset);
+  const setActiveList = useArk((s) => s.setActiveComponentList);
   const { user, loading, signOut } = useAuth();
   const perms = usePermissions(user?.id ?? null);
   const navigate = useNavigate();
+  const { projectName } = useProjectName();
   useCloudSync(user?.id ?? null);
 
   useEffect(() => {
@@ -146,7 +148,7 @@ function Index() {
               {canEdit ? (dataset?.fileName ?? "Nenhum arquivo carregado") : "Visualização da lista consolidada"}
             </p>
             <h1 className="text-xl font-semibold">
-              {canEdit ? "Tabela pronta para analise" : "ArkBIM"}
+              {canEdit ? "Tabela pronta para analise" : projectName}
             </h1>
           </div>
           <div className="flex items-center gap-3">
@@ -161,11 +163,12 @@ function Index() {
         </header>
 
         <div className="p-6">
-          <Tabs defaultValue={defaultTab}>
+          <Tabs value={activeTab ?? defaultTab} onValueChange={setActiveTab}>
             <TabsList>
               {canEdit && <TabsTrigger value="analise">Analise e agrupamento</TabsTrigger>}
               <TabsTrigger value="consolidada">Listas consolidadas</TabsTrigger>
               <TabsTrigger value="pavimento">Por pavimento</TabsTrigger>
+              {canEdit && <TabsTrigger value="comentarios">Comentários</TabsTrigger>}
               {canEdit && <TabsTrigger value="auditoria">Auditoria BIM</TabsTrigger>}
               {canEdit && <TabsTrigger value="diagnostico">Diagnóstico</TabsTrigger>}
               {isMaster && <TabsTrigger value="usuarios">Usuários</TabsTrigger>}
@@ -181,6 +184,16 @@ function Index() {
             <TabsContent value="pavimento" className="mt-4">
               <FloorView />
             </TabsContent>
+            {canEdit && (
+              <TabsContent value="comentarios" className="mt-4">
+                <CommentsCenter
+                  onNavigateToItem={(listId) => {
+                    setActiveList(listId);
+                    setActiveTab("consolidada");
+                  }}
+                />
+              </TabsContent>
+            )}
             {canEdit && (
               <TabsContent value="auditoria" className="mt-4">
                 <AuditoriaTab />
