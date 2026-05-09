@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Layers, Plus, Lock } from "lucide-react";
+import { Layers, Plus } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -34,14 +35,19 @@ import {
   DEFAULT_FLOOR_COLUMN,
   planConsolidation,
   type ConsolidatePlan,
+  type ConsolidatedItem,
   type MeasureMode,
 } from "@/lib/component-lists";
 import type { Row } from "@/lib/parse";
+import { ColumnMappingDialog } from "./ColumnMappingDialog";
 
 interface Props {
   rows: Row[];
   columns: string[];
   selectedCount: number;
+  /** Schema override coming from the AnaliseTab quick selectors. */
+  defaultKeyColumn?: string;
+  defaultFloorColumn?: string;
   onConsolidated?: () => void;
 }
 
@@ -49,10 +55,13 @@ export function ConsolidateAction({
   rows,
   columns,
   selectedCount,
+  defaultKeyColumn,
+  defaultFloorColumn,
   onConsolidated,
 }: Props) {
   const lists = useArk((s) => s.componentLists);
   const createList = useArk((s) => s.createComponentList);
+  const updateList = useArk((s) => s.updateComponentList);
   const apply = useArk((s) => s.applyConsolidation);
   const dataset = useArk((s) => s.dataset);
 
@@ -61,6 +70,17 @@ export function ConsolidateAction({
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedListId, setSelectedListId] = useState<string>("");
+
+  // Per-run schema override
+  const [keyOverride, setKeyOverride] = useState<string>("");
+  const [floorOverride, setFloorOverride] = useState<string>("");
+  const [persistSchema, setPersistSchema] = useState(false);
+
+  // Mapping step
+  const [mapOpen, setMapOpen] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<ConsolidatePlan | null>(null);
+  const [pendingListId, setPendingListId] = useState<string>("");
+
   const [plan, setPlan] = useState<ConsolidatePlan | null>(null);
   const [conflictOpen, setConflictOpen] = useState(false);
 
@@ -71,24 +91,49 @@ export function ConsolidateAction({
   const [newMode, setNewMode] = useState<MeasureMode>("count");
   const [newAreaCol, setNewAreaCol] = useState<string>("");
 
+  const activeList = lists.find((l) => l.id === selectedListId);
+
+  // Sync overrides when list changes / dialog opens
+  useEffect(() => {
+    if (!open) return;
+    if (activeList) {
+      setKeyOverride(activeList.keyColumn);
+      setFloorOverride(activeList.floorColumn);
+    } else {
+      setKeyOverride(defaultKeyColumn || DEFAULT_KEY_COLUMN);
+      setFloorOverride(defaultFloorColumn || DEFAULT_FLOOR_COLUMN);
+    }
+    setPersistSchema(false);
+  }, [open, activeList, defaultKeyColumn, defaultFloorColumn]);
+
   useEffect(() => {
     if (!createOpen) return;
-    // Smart defaults based on dataset cols
-    if (datasetCols.includes(DEFAULT_KEY_COLUMN)) setNewKey(DEFAULT_KEY_COLUMN);
+    if (datasetCols.includes(defaultKeyColumn || "")) setNewKey(defaultKeyColumn!);
+    else if (datasetCols.includes(DEFAULT_KEY_COLUMN)) setNewKey(DEFAULT_KEY_COLUMN);
     else if (datasetCols.includes("Marca de Tipo")) setNewKey("Marca de Tipo");
     else setNewKey(datasetCols[0] ?? "");
     setNewFloor(
-      datasetCols.includes(DEFAULT_FLOOR_COLUMN)
-        ? DEFAULT_FLOOR_COLUMN
-        : datasetCols[0] ?? "",
+      datasetCols.includes(defaultFloorColumn || "")
+        ? defaultFloorColumn!
+        : datasetCols.includes(DEFAULT_FLOOR_COLUMN)
+          ? DEFAULT_FLOOR_COLUMN
+          : datasetCols[0] ?? "",
     );
-  }, [createOpen, datasetCols]);
+  }, [createOpen, datasetCols, defaultKeyColumn, defaultFloorColumn]);
 
   const runWithList = (listId: string) => {
     const list = lists.find((l) => l.id === listId);
     if (!list) return;
-    if (!datasetCols.includes(list.keyColumn)) {
-      toast.error(`Coluna chave "${list.keyColumn}" não existe no dataset atual`);
+
+    const effectiveKey = keyOverride || list.keyColumn;
+    const effectiveFloor = floorOverride || list.floorColumn;
+
+    if (!datasetCols.includes(effectiveKey)) {
+      toast.error(`Coluna chave "${effectiveKey}" não existe no dataset atual`);
+      return;
+    }
+    if (!datasetCols.includes(effectiveFloor)) {
+      toast.error(`Coluna de pavimento "${effectiveFloor}" não existe`);
       return;
     }
     if (list.measureMode === "area" && (!list.areaColumn || !datasetCols.includes(list.areaColumn))) {
@@ -99,18 +144,47 @@ export function ConsolidateAction({
       toast.error("Nenhuma linha para consolidar");
       return;
     }
+
+    if (persistSchema && (effectiveKey !== list.keyColumn || effectiveFloor !== list.floorColumn)) {
+      updateList(list.id, { keyColumn: effectiveKey, floorColumn: effectiveFloor });
+    }
+
+    const effectiveList = { ...list, keyColumn: effectiveKey, floorColumn: effectiveFloor };
     const effectiveCols = Array.from(
-      new Set([list.keyColumn, list.floorColumn, list.fileColumn, ...columns]),
+      new Set([effectiveKey, effectiveFloor, list.fileColumn, ...columns]),
     );
-    const p = planConsolidation(rows, effectiveCols, list);
+    const p = planConsolidation(rows, effectiveCols, effectiveList);
     if (p.preview.length === 0) {
       toast.error(
         p.invalidRows
-          ? `Nenhum ${list.keyColumn} válido (${p.invalidRows} linhas ignoradas)`
+          ? `Nenhum ${effectiveKey} válido (${p.invalidRows} linhas ignoradas)`
           : "Nenhum item para consolidar",
       );
       return;
     }
+
+    // Step: column mapping. Only when the list already has items AND incoming
+    // columns introduce names that don't exist in the list.
+    if (list.items.length > 0) {
+      const existing = new Set<string>();
+      for (const i of list.items) for (const c of i.columns) existing.add(c);
+      const incoming = new Set<string>();
+      for (const it of p.preview) for (const c of it.columns) incoming.add(c);
+      const newOnes = Array.from(incoming).filter((c) => !existing.has(c));
+      if (newOnes.length > 0 && Array.from(existing).length > 0) {
+        setPendingPlan(p);
+        setPendingListId(list.id);
+        setOpen(false);
+        setMapOpen(true);
+        return;
+      }
+    }
+
+    proceed(list, p);
+  };
+
+  const proceed = (list: ReturnType<typeof lists.find>, p: ConsolidatePlan) => {
+    if (!list) return;
     if (p.conflicts.length === 0) {
       const out = apply(list.id, p, "overwrite");
       const unit = list.measureMode === "area" ? "m²" : "un";
@@ -129,23 +203,37 @@ export function ConsolidateAction({
     setConflictOpen(true);
   };
 
+  const applyMappingAndProceed = (mapping: Record<string, string | null>) => {
+    if (!pendingPlan || !pendingListId) return;
+    const list = lists.find((l) => l.id === pendingListId);
+    if (!list) return;
+    const remap = (it: ConsolidatedItem): ConsolidatedItem => {
+      const params: Record<string, string> = {};
+      const cols: string[] = [];
+      for (const c of it.columns) {
+        const dst = mapping[c];
+        if (dst === null || dst === undefined) continue;
+        params[dst] = it.params[c] ?? "";
+        if (!cols.includes(dst)) cols.push(dst);
+      }
+      return { ...it, params, columns: cols };
+    };
+    const p: ConsolidatePlan = {
+      ...pendingPlan,
+      preview: pendingPlan.preview.map(remap),
+      newItems: pendingPlan.newItems.map(remap),
+    };
+    setMapOpen(false);
+    setPendingPlan(null);
+    proceed(list, p);
+  };
+
   const handleCreate = () => {
-    if (!newName.trim()) {
-      toast.error("Informe o nome da categoria");
-      return;
-    }
-    if (!newKey || !datasetCols.includes(newKey)) {
-      toast.error("Coluna chave inválida");
-      return;
-    }
-    if (!newFloor || !datasetCols.includes(newFloor)) {
-      toast.error("Coluna de pavimento inválida");
-      return;
-    }
-    if (newMode === "area" && (!newAreaCol || !datasetCols.includes(newAreaCol))) {
-      toast.error("Selecione a coluna de área (m²)");
-      return;
-    }
+    if (!newName.trim()) return toast.error("Informe o nome da categoria");
+    if (!newKey || !datasetCols.includes(newKey)) return toast.error("Coluna chave inválida");
+    if (!newFloor || !datasetCols.includes(newFloor)) return toast.error("Coluna de pavimento inválida");
+    if (newMode === "area" && (!newAreaCol || !datasetCols.includes(newAreaCol)))
+      return toast.error("Selecione a coluna de área (m²)");
     const opts: CreateListOpts = {
       name: newName.trim(),
       keyColumn: newKey,
@@ -157,6 +245,9 @@ export function ConsolidateAction({
     setCreateOpen(false);
     setOpen(false);
     setNewName("");
+    setSelectedListId(id);
+    setKeyOverride(newKey);
+    setFloorOverride(newFloor);
     runWithList(id);
   };
 
@@ -175,10 +266,26 @@ export function ConsolidateAction({
     onConsolidated?.();
   };
 
-  const activeList = lists.find((l) => l.id === selectedListId);
-  const sourceLabel = selectedCount > 0
-    ? `${selectedCount} selecionado(s)`
-    : `todos os ${rows.length} filtrados`;
+  const sourceLabel =
+    selectedCount > 0
+      ? `${selectedCount} selecionado(s)`
+      : `todos os ${rows.length} filtrados`;
+
+  // Pending columns for mapping dialog
+  const pendingExisting = useMemo(() => {
+    if (!pendingListId) return [] as string[];
+    const list = lists.find((l) => l.id === pendingListId);
+    if (!list) return [];
+    const set = new Set<string>();
+    for (const i of list.items) for (const c of i.columns) set.add(c);
+    return Array.from(set);
+  }, [pendingListId, lists]);
+  const pendingIncoming = useMemo(() => {
+    if (!pendingPlan) return [] as string[];
+    const set = new Set<string>();
+    for (const it of pendingPlan.preview) for (const c of it.columns) set.add(c);
+    return Array.from(set);
+  }, [pendingPlan]);
 
   return (
     <>
@@ -192,8 +299,8 @@ export function ConsolidateAction({
           <DialogHeader>
             <DialogTitle>Consolidar em uma categoria</DialogTitle>
             <DialogDescription>
-              {sourceLabel} serão consolidadas. Cada categoria define a coluna
-              chave, a coluna de pavimento e o modo de medida.
+              {sourceLabel} serão consolidadas. Confirme a coluna chave e a coluna
+              de pavimento antes de prosseguir.
             </DialogDescription>
           </DialogHeader>
           {lists.length === 0 ? (
@@ -201,33 +308,62 @@ export function ConsolidateAction({
               Nenhuma categoria criada ainda. Crie uma agora.
             </p>
           ) : (
-            <div className="space-y-2">
-              <Label className="text-xs">Categoria de destino</Label>
-              <Select value={selectedListId} onValueChange={setSelectedListId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Escolha uma categoria…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lists.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name} · {l.items.length} itens · chave: {l.keyColumn} ·{" "}
-                      {l.measureMode === "area" ? "m²" : "un"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {activeList && (
-                <div className="rounded border bg-muted/40 p-2 text-[11px] text-muted-foreground">
-                  <Lock className="mr-1 inline h-3 w-3" />
-                  Chave: <strong>{activeList.keyColumn}</strong> · Pavimento:{" "}
-                  <strong>{activeList.floorColumn}</strong> · Modo:{" "}
-                  <strong>
-                    {activeList.measureMode === "area"
-                      ? `por área (${activeList.areaColumn})`
-                      : "por item"}
-                  </strong>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Categoria de destino</Label>
+                <Select value={selectedListId} onValueChange={setSelectedListId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha uma categoria…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lists.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.name} · {l.items.length} itens · chave: {l.keyColumn} ·{" "}
+                        {l.measureMode === "area" ? "m²" : "un"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Coluna chave</Label>
+                  <Select value={keyOverride} onValueChange={setKeyOverride}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {datasetCols.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
+                <div>
+                  <Label className="text-xs">Coluna de pavimento</Label>
+                  <Select value={floorOverride} onValueChange={setFloorOverride}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {datasetCols.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {activeList &&
+                (keyOverride !== activeList.keyColumn ||
+                  floorOverride !== activeList.floorColumn) && (
+                  <label className="flex items-start gap-2 rounded border bg-muted/40 p-2 text-[11px]">
+                    <Checkbox
+                      checked={persistSchema}
+                      onCheckedChange={(v) => setPersistSchema(!!v)}
+                    />
+                    <span>
+                      Atualizar esquema da categoria <strong>{activeList.name}</strong>{" "}
+                      com chave <strong>{keyOverride}</strong> e pavimento{" "}
+                      <strong>{floorOverride}</strong>.
+                    </span>
+                  </label>
+                )}
             </div>
           )}
           <DialogFooter className="gap-2">
@@ -249,8 +385,8 @@ export function ConsolidateAction({
           <DialogHeader>
             <DialogTitle>Nova categoria</DialogTitle>
             <DialogDescription>
-              Defina o esquema da categoria. Estes campos ficam fixos para evitar
-              dados inconsistentes.
+              Defina o esquema da categoria. Modo (item/área) fica fixo após a
+              criação. Chave e pavimento podem ser alterados depois.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -264,18 +400,12 @@ export function ConsolidateAction({
               />
             </div>
             <div>
-              <Label className="text-xs">
-                Coluna chave (identificador único do item)
-              </Label>
+              <Label className="text-xs">Coluna chave</Label>
               <Select value={newKey} onValueChange={setNewKey}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {datasetCols.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -283,14 +413,10 @@ export function ConsolidateAction({
             <div>
               <Label className="text-xs">Coluna de pavimento</Label>
               <Select value={newFloor} onValueChange={setNewFloor}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {datasetCols.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -325,9 +451,7 @@ export function ConsolidateAction({
                   </SelectTrigger>
                   <SelectContent>
                     {datasetCols.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -335,13 +459,19 @@ export function ConsolidateAction({
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancelar
-            </Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreate}>Criar e consolidar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ColumnMappingDialog
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+        incomingColumns={pendingIncoming}
+        existingColumns={pendingExisting}
+        onConfirm={applyMappingAndProceed}
+      />
 
       <Dialog open={conflictOpen} onOpenChange={setConflictOpen}>
         <DialogContent className="max-w-3xl">
@@ -370,9 +500,7 @@ export function ConsolidateAction({
                       <TableRow key={`${c.typeMark}::${col}`}>
                         <TableCell className="font-medium">{c.typeMark}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-[10px]">
-                            {col}
-                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">{col}</Badge>
                         </TableCell>
                         <TableCell className="text-xs">{c.existing[col] || "—"}</TableCell>
                         <TableCell className="text-xs font-medium">
@@ -386,12 +514,8 @@ export function ConsolidateAction({
             </div>
           )}
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setConflictOpen(false)}>
-              Cancelar
-            </Button>
-            <Button variant="secondary" onClick={() => commit("only-new")}>
-              Apenas novos
-            </Button>
+            <Button variant="outline" onClick={() => setConflictOpen(false)}>Cancelar</Button>
+            <Button variant="secondary" onClick={() => commit("only-new")}>Apenas novos</Button>
             <Button onClick={() => commit("overwrite")}>Sobrepor</Button>
           </DialogFooter>
         </DialogContent>
