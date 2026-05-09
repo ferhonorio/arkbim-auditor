@@ -342,9 +342,11 @@ export function migrateComponentList(l: Partial<ComponentList> & { id: string; n
     areaColumn: l.areaColumn,
     columnAliases: l.columnAliases ?? {},
     columnWidths: l.columnWidths ?? {},
+    floorAliases: l.floorAliases ?? {},
     items: occMigrated,
     sourceFiles: l.sourceFiles ?? [],
     createdAt: l.createdAt ?? Date.now(),
     updatedAt: l.updatedAt ?? Date.now(),
+    lastSnapshot: l.lastSnapshot,
   };
 }
