@@ -1,85 +1,180 @@
-## Visão geral
 
-Implementar sistema de permissões hierárquico com aprovação manual + reset de senha por e-mail.
+# Plano — Reestruturação ArkBIM
 
-## 1. Banco de dados (migration)
+Trabalho organizado em 6 blocos. Implementaremos em sequência, com migrations agrupadas no início para evitar quebras intermediárias.
 
-**Atualizar enum `app_role`** — adicionar novos valores:
-- `master` (super admin, primeiro usuário)
-- `coordenador` (edita listas e trata dados)
-- `comentador` (apenas visualiza + comenta)
-- `visualizador` (apenas visualiza)
-- manter `admin` e `user` por compat (não usados na nova UX)
+---
 
-**Adicionar coluna `status` em `profiles`**:
-- `pending` (default para novos cadastros)
-- `approved`
-- `rejected`
+## Bloco 1 — Banco de dados (1 migration consolidada)
 
-**Atualizar trigger `handle_new_user`**:
-- Se for o **primeiro usuário** do sistema (count=0 em `user_roles`): atribuir role `master` + status `approved`
-- Caso contrário: status `pending`, **sem role atribuída** (master atribui depois)
+### 1.1 Remover `visualizador`
+- Como Postgres não permite remover valor de enum em uso, criaremos novo enum `app_role_v2` (`master`,`coordenador`,`comentador`) e migraremos a coluna `user_roles.role`.
+- Linhas existentes com `visualizador` → convertidas para `comentador` (mais próximo) e log opcional.
 
-**Funções auxiliares**:
-- `is_master(uid)` — security definer
-- `can_edit_lists(uid)` — true para master ou coordenador
-- `can_comment(uid)` — true para master, coordenador ou comentador
-- `is_approved(uid)` — checa profiles.status
+### 1.2 Etiqueta de usuário
+- Adicionar coluna `user_label text` em `profiles`.
 
-**Atualizar RLS de `component_lists`**:
-- SELECT: qualquer usuário aprovado (todos os tipos veem)
-- INSERT/UPDATE/DELETE: apenas master ou coordenador
+### 1.3 Tabela `public_share_links`
+```
+id uuid pk, token text unique not null, list_id uuid null,
+scope text check in ('all','category'), expires_at timestamptz null,
+created_by uuid not null, is_active boolean default true,
+created_at timestamptz default now()
+```
+- RLS: SELECT/INSERT/UPDATE/DELETE só para `can_edit_lists(auth.uid())`.
+- Função `public.get_share_payload(_token text)` SECURITY DEFINER que retorna jsonb com `list_id`, `scope` e `data` filtrado da `component_lists` — chamada via `supabase.rpc` sem auth (GRANT EXECUTE TO anon, authenticated). Validações: `is_active`, `expires_at > now()`.
 
-**Permitir master gerenciar roles e status**:
-- Adicionar policies INSERT/UPDATE/DELETE em `user_roles` para master
-- Adicionar policy UPDATE em `profiles` para master (mudar status)
-- Adicionar policy SELECT em `profiles` para master ver todos
+### 1.4 Tabela `item_comments`
+```
+id uuid pk, list_id uuid not null, item_key text not null,
+user_id uuid not null, text text not null,
+created_at timestamptz default now(),
+expires_at timestamptz default now() + interval '15 days',
+resolved_at timestamptz null, resolved_by uuid null
+```
+- RLS:
+  - SELECT: `is_approved(auth.uid())` e (não expirado OR `can_edit_lists`).
+  - INSERT: `can_comment(auth.uid())` e `user_id = auth.uid()`.
+  - UPDATE/DELETE: autor (próprio) OU `can_edit_lists` (resolver/excluir).
 
-## 2. Reset de senha
+### 1.5 RLS de `component_lists` — restringir DELETE ao Master
+- Trocar policy `lists_delete_owner_or_master` para apenas `is_master(auth.uid())`.
+- Manter UPDATE/INSERT para Master + Coordenador.
 
-- Botão "Esqueci minha senha" em `AuthForm.tsx` → chama `supabase.auth.resetPasswordForEmail(email, { redirectTo: ${origin}/reset-password })`
-- Nova rota pública `src/routes/reset-password.tsx` — formulário para nova senha, chama `supabase.auth.updateUser({ password })`
+### 1.6 Auth — desabilitar reset por e-mail
+- Não há ajuste de DB (Supabase ainda aceita resetPasswordForEmail no dashboard); apenas removeremos do código.
 
-## 3. Hook de permissões
+### 1.7 Edge Function `admin-reset-password`
+- Deno function que valida JWT do chamador, confere `is_master` no DB, e usa `SUPABASE_SERVICE_ROLE_KEY` (server-side) para `auth.admin.updateUserById(id,{password})` + marcar `profiles.must_change_password = true`.
+- Adicionar coluna `must_change_password boolean default false` em `profiles`.
 
-`src/lib/permissions.ts` — hook `usePermissions()` retornando:
-- `role`, `status`, `isMaster`, `canEdit`, `canComment`, `isApproved`, `loading`
+---
 
-## 4. Gate de aprovação no app
+## Bloco 2 — Auth e reset de senha
 
-Em `src/routes/index.tsx`:
-- Se logado mas `status === 'pending'` → tela "Aguardando aprovação do administrador"
-- Se `status === 'rejected'` → tela "Acesso negado"
-- Se aprovado → app normal, mas:
-  - `canEdit=false` esconde upload, botão consolidar, edição
-  - Apenas `comentador`/`visualizador` veem só a aba "Listas consolidadas" em modo leitura
+- **Remover** botão "Esqueci minha senha", estado `forgotOpen`, função `sendReset` em `AuthForm.tsx`.
+- **Remover** rota `src/routes/reset-password.tsx`.
+- **Novo fluxo**: ao logar, se `profiles.must_change_password === true`, redirecionar para nova rota `/change-password` (formulário `supabase.auth.updateUser({password})` + marca `must_change_password=false`). Bloqueia o app até trocar.
+- **UsersPanel**: nova ação "Redefinir senha" (somente Master) → modal com campos "Nova senha" + botão "Gerar" (random 12 chars). Chama edge function via `supabase.functions.invoke('admin-reset-password', {...})`. Mostra a senha em texto + botão copiar.
 
-## 5. Painel de administração (master)
+---
 
-Nova aba "Usuários" visível só para master:
-- Lista todos profiles com email, nome, role atual, status
-- Ações: Aprovar / Rejeitar / Mudar role (dropdown com 3 opções) / Revogar acesso
-- Implementado em `src/components/admin/UsersPanel.tsx`
+## Bloco 3 — Permissões e UI por papel
 
-## 6. Restrições de UI por role
+- `src/lib/permissions.ts`: remover `visualizador`. Tipos: `master | coordenador | comentador`.
+- `UsersPanel.tsx`:
+  - Remover opção "Visualizador" do `<Select>`.
+  - Coluna nova "Etiqueta" (input editável → update `profiles.user_label`).
+  - Botão "Redefinir senha" (apenas se viewer = master e linha != master/me).
+- `ListsTab.tsx` / `index.tsx`:
+  - `canEdit` (master|coordenador): edição de itens, criar/limpar/editar categoria, gerar share link.
+  - `canDeleteCategory` (somente master): botão "Excluir categoria" só visível p/ master.
+  - `canComment` (master|coord|comentador): vê e cria comentários.
+  - Comentador: modo de leitura igual ao visualizador anterior, mas com indicador de comentário e formulário inline.
 
-- **Coordenador**: igual ao master, sem aba "Usuários"
-- **Comentador/Visualizador**: só aba "Listas consolidadas" em modo apresentação read-only; comentador vê botão de comentar (comentários ficam para fase futura — não estão no escopo agora pois sistema de comentários ainda não existe; vou apenas preparar a permissão)
+---
 
-## Arquivos
+## Bloco 4 — Link público de visualização
 
-**Criar**:
-- `src/lib/permissions.ts`
-- `src/components/admin/UsersPanel.tsx`
-- `src/components/auth/PendingApproval.tsx`
+- Botão "Compartilhar" em `CategoryView` (master/coord) → modal:
+  - Escopo: categoria atual / todas
+  - Validade: nunca / 7 / 30 dias
+  - Gera token (`crypto.randomUUID()` + base36) inserido em `public_share_links`
+  - Mostra URL `${origin}/share/{token}` + copiar
+  - Lista links existentes com toggle ativar/desativar e revogar
+- Nova rota pública `src/routes/share.$token.tsx`:
+  - Não usa `_authenticated`. Chama `supabase.rpc('get_share_payload', {token})`.
+  - Renderiza um `PresentationView` simplificado com: tabs de categorias permitidas, filtro por pavimento, "Copiar lista", "Copiar célula".
+  - Sem botões de export interno, sem sidebar admin, sem comentários.
+
+---
+
+## Bloco 5 — Comentários, visão por pavimento e exportação
+
+### 5.1 Comentários
+- Hook `useItemComments(listId)` carrega comentários ativos (não expirados, não resolvidos) e expõe `add/resolve/delete`.
+- Em `CategoryView`: ícone `MessageSquare` com contador na coluna chave (linha do item). Click abre `Popover` com lista de comentários + textarea (se `canComment`). Master/Coord veem botão "Resolver" e "Excluir".
+- Comentador continua vendo a tabela em modo leitura, mas com ícone de comentário ativo na linha.
+
+### 5.2 Visão por pavimento
+- Toggle no topo do `ListsTab`: "Por categoria" | "Por pavimento".
+- Novo componente `FloorView`: select de pavimento → lista accordion: cada categoria com seus itens cujas occurrences contêm o pavimento (qtd recalculada).
+- Disponível para master/coord/comentador. No share público, exibido se escopo=`all`.
+
+### 5.3 Exportação reorganizada (`ExportMenu.tsx`)
+- DropdownMenu com dois grupos:
+  - **Por categoria**: atual XLSX, todas (uma aba cada), CSV atual.
+  - **Por pavimento**: pavimento atual, todos (uma aba por pavimento), matriz categoria × pavimento.
+- Helpers em `src/lib/export.ts` adicionar funções `exportFloorCurrent`, `exportFloorsAll`, `exportMatrix`.
+- Padronizar nomes: `ArkBIM - {Categoria} - categoria.xlsx`, `ArkBIM - {Pavimento} - consolidado.xlsx`, `ArkBIM - matriz categoria-pavimento.xlsx`.
+
+---
+
+## Bloco 6 — UI das colunas e segurança final
+
+### 6.1 Larguras inteligentes
+- Em `CategoryView` e `PresentationView`:
+  - Ajustar defaults: ID/Type Mark 90px, Quantidade 80px, Modelo/Fabricante 160px, Descrição 320px (flex), URL 200px (truncate + tooltip).
+  - Substituir `truncate` por `whitespace-normal break-words` em descrição.
+  - `line-clamp-3` opcional em descrição no modo apresentação.
+  - Manter `table-layout: fixed` mas larguras heurísticas por nome de coluna (regex).
+
+### 6.2 Segurança
+- Confirmar que nenhum componente importa `client.server` ou usa `service_role`.
+- Edge function `admin-reset-password` é a única superfície privilegiada.
+- Revisão de RLS final via `supabase--linter`.
+- Garantir `handleSupabaseError` em todos os novos fluxos.
+
+---
+
+## Detalhamento técnico
+
+**Arquivos a alterar**
+- `src/components/auth/AuthForm.tsx` (remove forgot)
+- `src/lib/permissions.ts` (remove visualizador)
+- `src/components/admin/UsersPanel.tsx` (etiqueta + reset senha)
+- `src/components/ark/ListsTab.tsx` (toggle visão, comentários, share, larguras)
+- `src/components/ark/lists/PresentationView.tsx` (larguras, sem export)
+- `src/components/ark/lists/ExportMenu.tsx` (reorganização)
+- `src/lib/export.ts` (novas funções)
+- `src/routes/index.tsx` (gates por papel + must_change_password)
+- `src/routes/__root.tsx` (rota /share não autenticada)
+
+**Arquivos a criar**
+- `src/routes/share.$token.tsx`
+- `src/routes/change-password.tsx`
+- `src/components/ark/comments/ItemCommentsPopover.tsx`
+- `src/components/ark/lists/FloorView.tsx`
+- `src/components/ark/lists/ShareLinksDialog.tsx`
+- `src/lib/comments.ts` (hook)
+- `src/lib/share-links.ts` (helpers)
+- `supabase/functions/admin-reset-password/index.ts`
+
+**Arquivos a remover**
 - `src/routes/reset-password.tsx`
 
-**Editar**:
-- `src/components/auth/AuthForm.tsx` (forgot password)
-- `src/routes/index.tsx` (gate de status + aba Users + gating de UI)
-- migration SQL
+**Migrations**
+1. `*_role_visualizador_remove_share_comments.sql`:
+   - novo enum, migrate `user_roles.role`, drop antigo
+   - `profiles`: `user_label`, `must_change_password`
+   - tabelas `public_share_links`, `item_comments` + RLS
+   - função `get_share_payload`
+   - novo policy DELETE em `component_lists` (apenas master)
 
-## Observações
+**Novas tabelas**: `public_share_links`, `item_comments`.
 
-- Comentários por linha não fazem parte deste escopo (Phase 2 sharing); apenas a permissão `canComment` será preparada.
-- Email de reset usa o template padrão do Supabase Auth — sem necessidade de scaffold customizado agora.
+**Novas RLS** (resumo): `public_share_links_*` (apenas editores), `item_comments_*` (visíveis a aprovados, edição por autor/master/coord), `component_lists_delete_master_only`.
+
+**Edge function**: `admin-reset-password` (Master apenas).
+
+---
+
+## Como testar cada perfil
+
+- **Master** (você): login → vê aba Usuários, pode aprovar, editar etiqueta, redefinir senha de outros, criar/excluir categorias, gerar share, comentar, resolver comentários.
+- **Coordenador (Editor)**: cria conta → master aprova e atribui role + etiqueta → consegue editar dados, criar/limpar listas, gerar share link, comentar, **não vê** botão "Excluir categoria".
+- **Comentador**: aprovado + role comentador → vê tabela em leitura, vê ícone de comentários por linha, pode adicionar comentário próprio, **não pode** editar/excluir/limpar/exportar configurações internas, mas pode "Copiar lista".
+- **Anônimo via /share/{token}**: abre URL → vê apenas a(s) categoria(s) autorizada(s), filtro por pavimento, copiar célula/lista, sem nenhum botão administrativo. Tokens expirados/desativados retornam mensagem amigável.
+- **Reset de senha**: master clica "Redefinir senha" do usuário X → recebe nova senha → comunica fora do sistema → X faz login → forçado a `/change-password` → define nova → entra normal.
+
+Confirma para eu implementar?
