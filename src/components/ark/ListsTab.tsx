@@ -567,6 +567,14 @@ function CategoryView({
         </div>
       )}
 
+      <ShareLinksDialog
+        open={shareScope !== null}
+        onOpenChange={(o) => !o && setShareScope(null)}
+        scope={shareScope ?? "category"}
+        listId={shareScope === "category" ? list.id : undefined}
+        listName={list.name}
+      />
+
       <AlertDialog open={confirmUndo} onOpenChange={setConfirmUndo}>
         <AlertDialogContent>
           <AlertDialogHeader>
