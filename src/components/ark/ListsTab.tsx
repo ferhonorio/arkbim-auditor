@@ -310,7 +310,7 @@ function CategoryView({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setPresentationMode(true)}
+            onClick={onPresent}
           >
             <Presentation className="mr-1 h-3.5 w-3.5" /> Modo apresentação
           </Button>
