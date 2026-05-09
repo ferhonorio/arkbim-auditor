@@ -471,20 +471,23 @@ function CategoryView({
                         </Button>
                       </td>
                       <td
-                        className="truncate p-2 align-middle font-medium"
-                        title="Duplo-clique para renomear chave"
-                        onDoubleClick={() => handleRenameKey(i.key)}
+                        className="group/cell truncate p-2 align-middle font-medium"
+                        title={readOnly ? i.key : "Duplo-clique para renomear chave"}
+                        onDoubleClick={readOnly ? undefined : () => handleRenameKey(i.key)}
                       >
-                        {i.key}
+                        <CopyableContent value={i.key}>{i.key}</CopyableContent>
                       </td>
                       {allColumns.map((c) => {
-                        const isEditing = editing?.key === i.key && editing.col === c;
+                        const isEditing = !readOnly && editing?.key === i.key && editing.col === c;
+                        const value = i.params[c] ?? "";
                         return (
                           <td
                             key={c}
-                            className="truncate p-1 align-middle text-xs"
-                            title={i.params[c] ?? ""}
-                            onDoubleClick={() => startEdit(i.key, c, i.params[c] ?? "")}
+                            className="group/cell truncate p-1 align-middle text-xs"
+                            title={value}
+                            onDoubleClick={
+                              readOnly ? undefined : () => startEdit(i.key, c, value)
+                            }
                           >
                             {isEditing ? (
                               <Input
@@ -499,7 +502,9 @@ function CategoryView({
                                 className="h-6 text-xs"
                               />
                             ) : (
-                              <span className="block truncate p-1">{i.params[c] ?? ""}</span>
+                              <CopyableContent value={value}>
+                                <span className="block truncate p-1">{value}</span>
+                              </CopyableContent>
                             )}
                           </td>
                         );
@@ -508,17 +513,19 @@ function CategoryView({
                         {fmtQty(i.totalQuantity)}
                       </td>
                       <td className="p-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => {
-                            if (window.confirm(`Remover "${i.key}" da lista?`))
-                              onRemoveItem(i.key);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {!readOnly && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-destructive"
+                            onClick={() => {
+                              if (window.confirm(`Remover "${i.key}" da lista?`))
+                                onRemoveItem(i.key);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                     {open && (
