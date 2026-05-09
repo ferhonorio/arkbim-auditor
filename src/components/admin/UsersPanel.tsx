@@ -61,6 +61,22 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [resetResult, setResetResult] = useState<{ email: string; password: string } | null>(null);
   const [resetting, setResetting] = useState(false);
+  const { projectName, refresh: refreshProjectName } = useProjectName();
+  const [projectDraft, setProjectDraft] = useState("");
+  const [savingProject, setSavingProject] = useState(false);
+  useEffect(() => { setProjectDraft(projectName); }, [projectName]);
+  const onSaveProject = async () => {
+    setSavingProject(true);
+    try {
+      await saveProjectName(projectDraft, currentUserId);
+      await refreshProjectName();
+      toast.success("Nome do projeto salvo");
+    } catch (e) {
+      handleSupabaseError(e as { message?: string }, "save");
+    } finally {
+      setSavingProject(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
