@@ -437,7 +437,7 @@ function CategoryView({
                     origin={c}
                     width={colWidth(c)}
                     onResize={(w) => onSetWidth(c, w)}
-                    onRename={() => handleHeaderRename(c)}
+                    onRename={readOnly ? undefined : () => handleHeaderRename(c)}
                   />
                 ))}
                 <ResizableTh
