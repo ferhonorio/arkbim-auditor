@@ -8,6 +8,8 @@ import {
   ChevronRight,
   FolderOpen,
   Search as SearchIcon,
+  Undo2,
+  Map as MapIcon,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ import { toast } from "sonner";
 import { exportXLSX } from "@/lib/export";
 import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
 import type { Row } from "@/lib/parse";
+import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
@@ -40,6 +43,9 @@ export function ListsTab() {
   const setColumnWidth = useArk((s) => s.setColumnWidth);
   const removeItem = useArk((s) => s.removeListItem);
   const clearItems = useArk((s) => s.clearListItems);
+  const updateItemParam = useArk((s) => s.updateItemParam);
+  const renameItemKey = useArk((s) => s.renameItemKey);
+  const undoLast = useArk((s) => s.undoLastConsolidation);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
 
@@ -117,6 +123,18 @@ export function ListsTab() {
             onSetAlias={(col, alias) => setColumnAlias(active.id, col, alias)}
             onSetWidth={(col, w) => setColumnWidth(active.id, col, w)}
             onRemoveItem={(key) => removeItem(active.id, key)}
+            onUpdateParam={(key, col, val) => updateItemParam(active.id, key, col, val)}
+            onRenameKey={(oldK, newK) => {
+              const ok = renameItemKey(active.id, oldK, newK);
+              if (!ok) toast.error("Chave inválida ou já existe");
+              else toast.success("Chave renomeada");
+              return ok;
+            }}
+            onUndo={() => {
+              const ok = undoLast(active.id);
+              if (ok) toast.success("Última consolidação desfeita");
+              else toast.error("Nada para desfazer");
+            }}
           />
         )}
       </main>
@@ -132,6 +150,9 @@ function CategoryView({
   onSetAlias,
   onSetWidth,
   onRemoveItem,
+  onUpdateParam,
+  onRenameKey,
+  onUndo,
 }: {
   list: ComponentList;
   onRename: (name: string) => void;
@@ -140,10 +161,16 @@ function CategoryView({
   onSetAlias: (col: string, alias: string) => void;
   onSetWidth: (col: string, width: number) => void;
   onRemoveItem: (key: string) => void;
+  onUpdateParam: (key: string, col: string, val: string) => void;
+  onRenameKey: (oldKey: string, newKey: string) => boolean;
+  onUndo: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [floor, setFloor] = useState<string>("__all__");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showFloorMap, setShowFloorMap] = useState(false);
+  const [editing, setEditing] = useState<{ key: string; col: string } | null>(null);
+  const [editVal, setEditVal] = useState("");
 
   const unit = list.measureMode === "area" ? "m²" : "un";
   const qtyHeader = list.measureMode === "area" ? "Área (m²)" : "Qtd (un)";
@@ -190,10 +217,33 @@ function CategoryView({
   };
 
   const handleHeaderRename = (col: string) => {
+    if (col === list.keyColumn) {
+      toast.error("A coluna chave não pode ser renomeada");
+      return;
+    }
     const cur = list.columnAliases[col] || "";
     const next = window.prompt(`Renomear coluna "${col}":`, cur);
     if (next === null) return;
     onSetAlias(col, next.trim());
+  };
+
+  const handleRenameKey = (oldKey: string) => {
+    const next = window.prompt(`Renomear ${list.keyColumn} (chave):`, oldKey);
+    if (next == null) return;
+    const t = next.trim();
+    if (!t || t === oldKey) return;
+    onRenameKey(oldKey, t);
+  };
+
+  const startEdit = (key: string, col: string, value: string) => {
+    if (col === list.keyColumn) return;
+    setEditing({ key, col });
+    setEditVal(value);
+  };
+  const commitEdit = () => {
+    if (!editing) return;
+    onUpdateParam(editing.key, editing.col, editVal);
+    setEditing(null);
   };
 
   const handleExport = () => {
@@ -247,6 +297,26 @@ function CategoryView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onUndo}
+            disabled={!list.lastSnapshot}
+            title={
+              list.lastSnapshot
+                ? `Reverte ${list.lastSnapshot.summary.added} novo(s) / ${list.lastSnapshot.summary.updated} sobrescrito(s) — ${new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}`
+                : "Nada para desfazer"
+            }
+          >
+            <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer última
+          </Button>
+          <Button
+            size="sm"
+            variant={showFloorMap ? "default" : "outline"}
+            onClick={() => setShowFloorMap((v) => !v)}
+          >
+            <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
+          </Button>
           <Button size="sm" variant="outline" onClick={handleExport}>
             <Download className="mr-1 h-3.5 w-3.5" /> Exportar XLSX
           </Button>
@@ -258,6 +328,8 @@ function CategoryView({
           </Button>
         </div>
       </div>
+
+      {showFloorMap && <FloorMappingPanel list={list} />}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -313,7 +385,6 @@ function CategoryView({
                   origin={list.keyColumn}
                   width={colWidth(list.keyColumn, KEY_COL_WIDTH)}
                   onResize={(w) => onSetWidth(list.keyColumn, w)}
-                  onRename={() => handleHeaderRename(list.keyColumn)}
                   bold
                 />
                 {allColumns.map((c) => (
@@ -356,12 +427,40 @@ function CategoryView({
                           )}
                         </Button>
                       </td>
-                      <td className="truncate p-2 align-middle font-medium">{i.key}</td>
-                      {allColumns.map((c) => (
-                        <td key={c} className="truncate p-2 align-middle text-xs" title={i.params[c] ?? ""}>
-                          {i.params[c] ?? ""}
-                        </td>
-                      ))}
+                      <td
+                        className="truncate p-2 align-middle font-medium"
+                        title="Duplo-clique para renomear chave"
+                        onDoubleClick={() => handleRenameKey(i.key)}
+                      >
+                        {i.key}
+                      </td>
+                      {allColumns.map((c) => {
+                        const isEditing = editing?.key === i.key && editing.col === c;
+                        return (
+                          <td
+                            key={c}
+                            className="truncate p-1 align-middle text-xs"
+                            title={i.params[c] ?? ""}
+                            onDoubleClick={() => startEdit(i.key, c, i.params[c] ?? "")}
+                          >
+                            {isEditing ? (
+                              <Input
+                                autoFocus
+                                value={editVal}
+                                onChange={(e) => setEditVal(e.target.value)}
+                                onBlur={commitEdit}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") commitEdit();
+                                  else if (e.key === "Escape") setEditing(null);
+                                }}
+                                className="h-6 text-xs"
+                              />
+                            ) : (
+                              <span className="block truncate p-1">{i.params[c] ?? ""}</span>
+                            )}
+                          </td>
+                        );
+                      })}
                       <td className="p-2 text-right font-mono text-xs">
                         {fmtQty(i.totalQuantity)}
                       </td>

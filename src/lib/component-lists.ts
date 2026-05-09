@@ -24,6 +24,13 @@ export interface ConsolidatedItem {
   lastUpdatedAt: number;
 }
 
+export interface ConsolidationSnapshot {
+  items: ConsolidatedItem[];
+  sourceFiles: string[];
+  savedAt: number;
+  summary: { added: number; updated: number; skipped: number };
+}
+
 export interface ComponentList {
   id: string;
   name: string;
@@ -36,10 +43,13 @@ export interface ComponentList {
   areaColumn?: string;
   columnAliases: Record<string, string>;
   columnWidths?: Record<string, number>;
+  /** Map raw floor value (typically file name) to a friendly floor label. */
+  floorAliases?: Record<string, string>;
   items: ConsolidatedItem[];
   sourceFiles: string[];
   createdAt: number;
   updatedAt: number;
+  lastSnapshot?: ConsolidationSnapshot;
 }
 
 export type ConsolidationMode = "overwrite" | "only-new";
@@ -143,8 +153,10 @@ export function planConsolidation(
 
     // Group by floor + file to preserve provenance
     const byFloorFile = new Map<string, { floor: string; file: string; rows: Row[] }>();
+    const aliases = list.floorAliases ?? {};
     for (const r of grp) {
-      const floor = (r[floorCol] ?? "").trim() || "(sem pavimento)";
+      const rawFloor = (r[floorCol] ?? "").trim() || "(sem pavimento)";
+      const floor = aliases[rawFloor] || rawFloor;
       const file = (r[fileCol] ?? "").trim() || "(sem arquivo)";
       const k = `${floor}\u0001${file}`;
       if (!byFloorFile.has(k)) byFloorFile.set(k, { floor, file, rows: [] });
@@ -330,9 +342,38 @@ export function migrateComponentList(l: Partial<ComponentList> & { id: string; n
     areaColumn: l.areaColumn,
     columnAliases: l.columnAliases ?? {},
     columnWidths: l.columnWidths ?? {},
+    floorAliases: l.floorAliases ?? {},
     items: occMigrated,
     sourceFiles: l.sourceFiles ?? [],
     createdAt: l.createdAt ?? Date.now(),
     updatedAt: l.updatedAt ?? Date.now(),
+    lastSnapshot: l.lastSnapshot,
   };
 }
+
+/** Re-apply floor aliases to a list's existing items.occurrences (merging entries that collapse). */
+export function applyFloorAliasesToItems(items: ConsolidatedItem[], aliases: Record<string, string>): ConsolidatedItem[] {
+  return items.map((i) => {
+    const map = new Map<string, FileOccurrence>();
+    for (const o of i.occurrences) {
+      const floor = aliases[o.floor] || o.floor;
+      const k = `${floor}\u0001${o.file}`;
+      const prev = map.get(k);
+      if (prev) {
+        prev.quantity = Math.round((prev.quantity + o.quantity) * 1000) / 1000;
+        prev.ids = Array.from(new Set([...prev.ids, ...o.ids]));
+      } else {
+        map.set(k, { floor, file: o.file, quantity: o.quantity, ids: [...o.ids] });
+      }
+    }
+    const occurrences = Array.from(map.values()).sort(
+      (a, b) => a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
+    );
+    return {
+      ...i,
+      occurrences,
+      totalQuantity: Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
+    };
+  });
+}
+

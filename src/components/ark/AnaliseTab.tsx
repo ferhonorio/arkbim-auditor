@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, X, Copy, ArrowUp, ArrowDown, Save, Trash2, AlertTriangle, Info as InfoIcon } from "lucide-react";
 import { useArk, type ConcatStrategy } from "@/lib/store";
 import {
@@ -29,8 +29,10 @@ import {
 } from "@/components/ui/table";
 import { exportXLSX } from "@/lib/export";
 import { ConsolidateAction } from "@/components/ark/lists/ConsolidateAction";
+import { ResolveInconsistenciesDialog } from "@/components/ark/lists/ResolveInconsistenciesDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { DEFAULT_KEY_COLUMN, DEFAULT_FLOOR_COLUMN } from "@/lib/component-lists";
 
 const RULE_COLORS = ["#fee2e2", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#ffedd5"];
 
@@ -76,9 +78,32 @@ export function AnaliseTab() {
 
   const [page, setPage] = useState(0);
   const [selectedGroupKeys, setSelectedGroupKeys] = useState<Set<string>>(new Set());
+  const [resolveRuleId, setResolveRuleId] = useState<string | null>(null);
+
+  // Quick schema selectors next to "Consolidar"
+  const [quickKey, setQuickKey] = useState<string>("");
+  const [quickFloor, setQuickFloor] = useState<string>("");
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
+
+  // Initialize quick selectors based on dataset columns
+  useEffect(() => {
+    if (!cols.length) return;
+    setQuickKey((cur) => {
+      if (cur && cols.includes(cur)) return cur;
+      if (cols.includes(DEFAULT_KEY_COLUMN)) return DEFAULT_KEY_COLUMN;
+      if (cols.includes("Marca de Tipo")) return "Marca de Tipo";
+      return cols[0];
+    });
+    setQuickFloor((cur) => {
+      if (cur && cols.includes(cur)) return cur;
+      if (cols.includes(DEFAULT_FLOOR_COLUMN)) return DEFAULT_FLOOR_COLUMN;
+      if (cols.includes("Pavimento")) return "Pavimento";
+      return cols[0];
+    });
+  }, [cols]);
+
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
 
   const searched = useMemo(() => {
@@ -409,6 +434,16 @@ export function AnaliseTab() {
                 <span className="rounded bg-background/70 px-1.5 py-0.5 text-muted-foreground">
                   Linhas/chave (médio): {stats.avgRows.toFixed(1)}
                 </span>
+                {!noKey && !noCmp && stats.divergent > 0 && (r.applyWhen ?? "inconsistent") === "inconsistent" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="ml-auto h-6 text-[10px]"
+                    onClick={() => setResolveRuleId(r.id)}
+                  >
+                    Resolver inconsistências ({stats.divergent})
+                  </Button>
+                )}
               </div>
 
               {/* Inline alerts */}
@@ -508,6 +543,22 @@ export function AnaliseTab() {
             <Button size="sm" variant="outline" onClick={exportFiltered}>
               Exportar filtrado
             </Button>
+            <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[10px]">
+              <span className="text-muted-foreground">Chave:</span>
+              <Select value={quickKey} onValueChange={setQuickKey}>
+                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {cols.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              <span className="ml-1 text-muted-foreground">Pavimento:</span>
+              <Select value={quickFloor} onValueChange={setQuickFloor}>
+                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {cols.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
             <ConsolidateAction
               rows={
                 selectedGroupKeys.size > 0
@@ -524,6 +575,8 @@ export function AnaliseTab() {
                       .reduce((s, g) => s + g.rawRows.length, 0)
                   : 0
               }
+              defaultKeyColumn={quickKey}
+              defaultFloorColumn={quickFloor}
               onConsolidated={() => setSelectedGroupKeys(new Set())}
             />
           </div>
@@ -760,6 +813,18 @@ export function AnaliseTab() {
           </div>
         )}
       </Section>
+
+      {resolveRuleId && (() => {
+        const rule = visualRules.find((r) => r.id === resolveRuleId);
+        if (!rule) return null;
+        return (
+          <ResolveInconsistenciesDialog
+            open={!!resolveRuleId}
+            onOpenChange={(b) => !b && setResolveRuleId(null)}
+            rule={rule}
+          />
+        );
+      })()}
     </div>
   );
 }
