@@ -58,6 +58,7 @@ export function ListsTab() {
   const undoLast = useArk((s) => s.undoLastConsolidation);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
+  const [presentation, setPresentation] = useState(false);
 
   const handleCreate = () => {
     const name = window.prompt(
@@ -67,6 +68,18 @@ export function ListsTab() {
     createList(name.trim());
     toast.success(`Categoria "${name.trim()}" criada com defaults (Type Mark / Nome do arquivo / por item)`);
   };
+
+  if (presentation) {
+    return (
+      <div className="flex h-[calc(100vh-160px)] flex-col gap-4 overflow-auto">
+        <PresentationView
+          lists={lists}
+          initialId={active?.id}
+          onClose={() => setPresentation(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-160px)] gap-4">
