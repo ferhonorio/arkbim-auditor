@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { handleAuthError } from "@/lib/error-handling";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
@@ -36,7 +37,7 @@ function ResetPasswordPage() {
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) return handleAuthError(error, "update");
     toast.success("Senha atualizada! Entrando…");
     setTimeout(() => navigate({ to: "/" }), 800);
   };

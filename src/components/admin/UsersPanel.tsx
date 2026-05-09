@@ -12,6 +12,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Check, X, RefreshCw } from "lucide-react";
+import { handleSupabaseError } from "@/lib/error-handling";
 
 type AssignableRole = "coordenador" | "comentador" | "visualizador";
 
@@ -35,7 +36,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
       .select("id, email, display_name, status, created_at")
       .order("created_at", { ascending: true });
     if (error) {
-      toast.error("Falha ao carregar usuários: " + error.message);
+      handleSupabaseError(error, "load");
       setLoading(false);
       return;
     }
@@ -63,7 +64,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
 
   const setStatus = async (id: string, status: UserRow["status"]) => {
     const { error } = await supabase.from("profiles").update({ status }).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) return handleSupabaseError(error, "save");
     toast.success("Status atualizado");
     load();
   };
@@ -72,7 +73,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
     // remove existing role then insert (1 role per user)
     await supabase.from("user_roles").delete().eq("user_id", id);
     const { error } = await supabase.from("user_roles").insert({ user_id: id, role });
-    if (error) return toast.error(error.message);
+    if (error) return handleSupabaseError(error, "save");
     toast.success("Permissão atualizada");
     load();
   };

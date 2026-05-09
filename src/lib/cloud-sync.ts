@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useArk } from "./store";
 import { migrateComponentList, type ComponentList } from "./component-lists";
 import { toast } from "sonner";
+import { handleSupabaseError } from "./error-handling";
 
 interface RowDB {
   id: string;
@@ -41,7 +42,7 @@ export function useCloudSync(userId: string | null) {
         .order("client_updated_at", { ascending: false });
 
       if (error) {
-        toast.error("Falha ao carregar listas da nuvem: " + error.message);
+        handleSupabaseError(error, "load");
         return;
       }
 
@@ -73,7 +74,7 @@ export function useCloudSync(userId: string | null) {
           })),
         );
         if (upErr) {
-          toast.error("Falha ao enviar listas locais para a nuvem: " + upErr.message);
+          handleSupabaseError(upErr, "save");
         } else {
           for (const l of toUpload) {
             lastSyncedRef.current.set(l.id, l.updatedAt);
@@ -122,7 +123,7 @@ export function useCloudSync(userId: string | null) {
       if (removed.length) {
         const { error } = await supabase.from("component_lists").delete().in("id", removed);
         if (error) {
-          toast.error("Falha ao remover lista da nuvem: " + error.message);
+          handleSupabaseError(error, "delete");
         } else {
           for (const id of removed) {
             synced.delete(id);
@@ -142,7 +143,7 @@ export function useCloudSync(userId: string | null) {
           })),
         );
         if (error) {
-          toast.error("Falha ao salvar na nuvem: " + error.message);
+          handleSupabaseError(error, "save");
         } else {
           for (const l of changed) {
             synced.set(l.id, l.updatedAt);

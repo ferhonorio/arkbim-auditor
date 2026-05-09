@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { handleAuthError } from "@/lib/error-handling";
 
 export function AuthForm() {
   const [tab, setTab] = useState("signin");
@@ -35,8 +36,7 @@ export function AuthForm() {
         toast.success("Bem-vindo de volta!");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha na autenticação";
-      toast.error(msg);
+      handleAuthError(err, tab === "signup" ? "signup" : "signin");
     } finally {
       setLoading(false);
     }
@@ -49,7 +49,7 @@ export function AuthForm() {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) return handleAuthError(error, "reset");
     toast.success("E-mail de recuperação enviado. Verifique sua caixa de entrada.");
     setForgotOpen(false);
   };
