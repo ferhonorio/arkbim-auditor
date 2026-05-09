@@ -263,6 +263,16 @@ export const useArk = create<ArkState>()(
             return { ...l, columnAliases: aliases, updatedAt: Date.now() };
           }),
         })),
+      setColumnWidth: (id, column, width) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            const widths = { ...(l.columnWidths ?? {}) };
+            if (width > 0) widths[column] = Math.round(width);
+            else delete widths[column];
+            return { ...l, columnWidths: widths, updatedAt: Date.now() };
+          }),
+        })),
       applyConsolidation: (id, plan, mode) => {
         const state = get();
         const list = state.componentLists.find((l) => l.id === id);
