@@ -31,6 +31,12 @@ import { exportXLSX } from "@/lib/export";
 import { ConsolidateAction } from "@/components/ark/lists/ConsolidateAction";
 import { ResolveInconsistenciesDialog } from "@/components/ark/lists/ResolveInconsistenciesDialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { DEFAULT_KEY_COLUMN, DEFAULT_FLOOR_COLUMN } from "@/lib/component-lists";
 
