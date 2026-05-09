@@ -123,6 +123,18 @@ export function ListsTab() {
             onSetAlias={(col, alias) => setColumnAlias(active.id, col, alias)}
             onSetWidth={(col, w) => setColumnWidth(active.id, col, w)}
             onRemoveItem={(key) => removeItem(active.id, key)}
+            onUpdateParam={(key, col, val) => updateItemParam(active.id, key, col, val)}
+            onRenameKey={(oldK, newK) => {
+              const ok = renameItemKey(active.id, oldK, newK);
+              if (!ok) toast.error("Chave inválida ou já existe");
+              else toast.success("Chave renomeada");
+              return ok;
+            }}
+            onUndo={() => {
+              const ok = undoLast(active.id);
+              if (ok) toast.success("Última consolidação desfeita");
+              else toast.error("Nada para desfazer");
+            }}
           />
         )}
       </main>
