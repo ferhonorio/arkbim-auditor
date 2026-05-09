@@ -153,8 +153,10 @@ export function planConsolidation(
 
     // Group by floor + file to preserve provenance
     const byFloorFile = new Map<string, { floor: string; file: string; rows: Row[] }>();
+    const aliases = list.floorAliases ?? {};
     for (const r of grp) {
-      const floor = (r[floorCol] ?? "").trim() || "(sem pavimento)";
+      const rawFloor = (r[floorCol] ?? "").trim() || "(sem pavimento)";
+      const floor = aliases[rawFloor] || rawFloor;
       const file = (r[fileCol] ?? "").trim() || "(sem arquivo)";
       const k = `${floor}\u0001${file}`;
       if (!byFloorFile.has(k)) byFloorFile.set(k, { floor, file, rows: [] });
