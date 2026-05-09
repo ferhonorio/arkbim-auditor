@@ -75,19 +75,20 @@ export async function parseFile(file: File): Promise<Dataset> {
     defval: "",
     raw: false,
   });
-  const columns: string[] = [];
+  const rawCols: string[] = [];
   const seen = new Set<string>();
   for (const r of json) {
     for (const k of Object.keys(r)) {
       if (!seen.has(k)) {
         seen.add(k);
-        columns.push(k);
+        rawCols.push(k);
       }
     }
   }
+  const columns = rawCols.map(fixMojibake);
   const rows: Row[] = json.map((r) => {
     const out: Row = {};
-    for (const c of columns) out[c] = normalize(r[c]);
+    rawCols.forEach((c, i) => (out[columns[i]] = normalize(r[c])));
     return out;
   });
   return { fileName: file.name, columns, rows };
