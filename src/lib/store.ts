@@ -18,6 +18,7 @@ import {
   commitConsolidation,
   planConsolidation,
   migrateComponentList,
+  applyFloorAliasesToItems,
   DEFAULT_KEY_COLUMN,
   DEFAULT_FLOOR_COLUMN,
 } from "./component-lists";
