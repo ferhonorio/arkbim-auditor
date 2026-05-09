@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useArk } from "./store";
 import { migrateComponentList, type ComponentList } from "./component-lists";
 import { toast } from "sonner";
+import { handleSupabaseError } from "./error-handling";
 
 interface RowDB {
   id: string;
