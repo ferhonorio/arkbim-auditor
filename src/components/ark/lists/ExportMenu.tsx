@@ -169,15 +169,14 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
         Categoria: l.name,
         Itens: l.items.length,
         Pavimentos: floors.size,
-        [`Total (${unitOf(l)})`]: Math.round(total * 1000) / 1000,
+        Unidade: unitOf(l),
+        Total: Math.round(total * 1000) / 1000,
       };
     });
     sheets.push({
       name: "Resumo",
       rows: resumoRows,
-      columns: ["Categoria", "Itens", "Pavimentos", "Total (un|m²)"].map((c) =>
-        c === "Total (un|m²)" ? "Total" : c,
-      ),
+      columns: ["Categoria", "Itens", "Pavimentos", "Unidade", "Total"],
     });
     for (const l of allLists) {
       if (!l.items.length) continue;
