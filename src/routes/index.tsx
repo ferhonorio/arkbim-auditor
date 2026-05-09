@@ -97,11 +97,19 @@ function Index() {
 
       {/* Main */}
       <main className="flex-1 overflow-x-hidden">
-        <header className="border-b bg-card px-6 py-4">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            {dataset?.fileName ?? "Nenhum arquivo carregado"}
-          </p>
-          <h1 className="text-xl font-semibold">Tabela pronta para analise</h1>
+        <header className="flex items-start justify-between gap-4 border-b bg-card px-6 py-4">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {dataset?.fileName ?? "Nenhum arquivo carregado"}
+            </p>
+            <h1 className="text-xl font-semibold">Tabela pronta para analise</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">{user.email}</span>
+            <Button variant="outline" size="sm" onClick={signOut}>
+              <LogOut className="mr-1 h-3.5 w-3.5" /> Sair
+            </Button>
+          </div>
         </header>
 
         <div className="p-6">
