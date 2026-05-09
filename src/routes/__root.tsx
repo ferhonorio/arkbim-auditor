@@ -9,7 +9,6 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
-import { AuthProvider } from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -73,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "ArkBIM System" },
+      { name: "description", content: "ArkBIM Auditor analyzes and consolidates BIM data from CSV/XLSX files for model auditing." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "ArkBIM System" },
+      { property: "og:description", content: "ArkBIM Auditor analyzes and consolidates BIM data from CSV/XLSX files for model auditing." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "ArkBIM System" },
+      { name: "twitter:description", content: "ArkBIM Auditor analyzes and consolidates BIM data from CSV/XLSX files for model auditing." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5f408d3c-afb5-4f53-be29-093dcd5f27af/id-preview-e8dcf909--b0905110-6c1a-4974-804d-dd9d17a371d8.lovable.app-1778343880360.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/5f408d3c-afb5-4f53-be29-093dcd5f27af/id-preview-e8dcf909--b0905110-6c1a-4974-804d-dd9d17a371d8.lovable.app-1778343880360.png" },
     ],
     links: [
       {
@@ -114,9 +117,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Outlet />
-      </AuthProvider>
+      <Outlet />
     </QueryClientProvider>
   );
 }
