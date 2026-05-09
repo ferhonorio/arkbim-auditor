@@ -65,7 +65,22 @@ export async function revokeShareLink(id: string) {
   if (error) throw error;
 }
 
+/**
+ * Public share base URL. Always points to the user-facing custom domain
+ * so links shared with clients don't expose preview/Lovable URLs that may
+ * require authentication. Override via VITE_PUBLIC_SHARE_BASE_URL.
+ */
+const SHARE_BASE_URL =
+  (import.meta.env.VITE_PUBLIC_SHARE_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
+  "https://edise.ld.arkbim.com";
+
 export function buildShareUrl(token: string) {
-  if (typeof window === "undefined") return `/share/${token}`;
-  return `${window.location.origin}/share/${token}`;
+  return `${SHARE_BASE_URL}/share/${token}`;
+}
+
+/** Friendly display version of the link (host + truncated token). */
+export function formatShareUrlDisplay(token: string) {
+  const host = SHARE_BASE_URL.replace(/^https?:\/\//, "");
+  const short = token.length > 12 ? `${token.slice(0, 6)}…${token.slice(-4)}` : token;
+  return `${host}/share/${short}`;
 }
