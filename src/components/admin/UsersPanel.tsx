@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { Check, X, RefreshCw, KeyRound, Copy } from "lucide-react";
 import { handleSupabaseError } from "@/lib/error-handling";
+import { useProjectName, setProjectName as saveProjectName } from "@/lib/project-settings";
 
 type AssignableRole = "coordenador" | "comentador";
 
