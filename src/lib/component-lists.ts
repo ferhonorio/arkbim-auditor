@@ -24,6 +24,13 @@ export interface ConsolidatedItem {
   lastUpdatedAt: number;
 }
 
+export interface ConsolidationSnapshot {
+  items: ConsolidatedItem[];
+  sourceFiles: string[];
+  savedAt: number;
+  summary: { added: number; updated: number; skipped: number };
+}
+
 export interface ComponentList {
   id: string;
   name: string;
@@ -36,10 +43,13 @@ export interface ComponentList {
   areaColumn?: string;
   columnAliases: Record<string, string>;
   columnWidths?: Record<string, number>;
+  /** Map raw floor value (typically file name) to a friendly floor label. */
+  floorAliases?: Record<string, string>;
   items: ConsolidatedItem[];
   sourceFiles: string[];
   createdAt: number;
   updatedAt: number;
+  lastSnapshot?: ConsolidationSnapshot;
 }
 
 export type ConsolidationMode = "overwrite" | "only-new";
