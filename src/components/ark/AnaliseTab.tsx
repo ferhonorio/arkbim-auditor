@@ -730,7 +730,7 @@ export function AnaliseTab() {
               {!pageGroups.length && (
                 <TableRow>
                   <TableCell
-                    colSpan={groupVisible.length + concatCols.length + 1}
+                    colSpan={groupVisible.length + concatCols.length + 2}
                     className="text-center text-sm text-muted-foreground"
                   >
                     {dataset
