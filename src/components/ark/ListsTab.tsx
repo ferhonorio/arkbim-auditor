@@ -267,8 +267,8 @@ function CategoryView({
   }, [list.items, search, floor, allColumns]);
 
   const headerLabel = (col: string) => list.columnAliases[col] || col;
-  const colWidth = (col: string, fallback = DEFAULT_COL_WIDTH) =>
-    list.columnWidths?.[col] ?? fallback;
+  const colWidth = (col: string, fallback?: number) =>
+    list.columnWidths?.[col] ?? fallback ?? defaultWidthFor(col);
 
   const handleRename = () => {
     const name = window.prompt("Renomear categoria:", list.name);
