@@ -16,6 +16,12 @@ interface Props {
   itemKey: string;
   canComment: boolean;
   canModerate: boolean;
+  /** Pre-loaded count of open comments — shown without opening the popover. */
+  initialOpenCount?: number;
+  /** Pre-loaded last author name (for tooltip). */
+  lastAuthorName?: string | null;
+  /** Pre-loaded last author label (for tooltip). */
+  lastAuthorLabel?: string | null;
 }
 
 function formatDate(iso: string) {
@@ -29,7 +35,15 @@ function timeRemaining(iso: string) {
   return `expira em ${days} dia${days === 1 ? "" : "s"}`;
 }
 
-export function ItemCommentsPopover({ listId, itemKey, canComment, canModerate }: Props) {
+export function ItemCommentsPopover({
+  listId,
+  itemKey,
+  canComment,
+  canModerate,
+  initialOpenCount = 0,
+  lastAuthorName,
+  lastAuthorLabel,
+}: Props) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
@@ -44,19 +58,29 @@ export function ItemCommentsPopover({ listId, itemKey, canComment, canModerate }
     setDraft("");
   };
 
+  const displayCount = open ? openCount : initialOpenCount;
+  const hasComments = displayCount > 0;
+  const tooltip = hasComments
+    ? `${displayCount} comentário${displayCount === 1 ? "" : "s"}${
+        lastAuthorName
+          ? ` · último por ${lastAuthorName}${lastAuthorLabel ? ` (${lastAuthorLabel})` : ""}`
+          : ""
+      }`
+    : "Comentários";
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           size="icon"
           variant="ghost"
-          className="relative h-6 w-6"
-          title="Comentários"
+          className={`relative h-6 w-6 ${hasComments ? "text-primary" : ""}`}
+          title={tooltip}
         >
-          <MessageSquare className="h-3.5 w-3.5" />
-          {openCount > 0 && (
+          <MessageSquare className={`h-3.5 w-3.5 ${hasComments ? "fill-primary/20" : ""}`} />
+          {hasComments && (
             <Badge className="absolute -right-1.5 -top-1.5 h-3.5 min-w-3.5 px-1 text-[9px]">
-              {openCount}
+              {displayCount}
             </Badge>
           )}
         </Button>
