@@ -316,6 +316,10 @@ export const useArk = create<ArkState>()(
           ),
         })),
 
+      selectedRowIds: [],
+      setSelectedRowIds: (ids) => set({ selectedRowIds: ids }),
+      clearSelectedRowIds: () => set({ selectedRowIds: [] }),
+
       filterPresets: [],
       rulePresets: [],
       groupingPresets: [],
