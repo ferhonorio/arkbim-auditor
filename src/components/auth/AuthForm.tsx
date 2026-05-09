@@ -13,7 +13,6 @@ export function AuthForm() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const [forgotOpen, setForgotOpen] = useState(false);
 
   const handle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,18 +39,6 @@ export function AuthForm() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const sendReset = async () => {
-    if (!email) return toast.error("Informe seu e-mail no campo acima primeiro.");
-    setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    setLoading(false);
-    if (error) return handleAuthError(error, "reset");
-    toast.success("E-mail de recuperação enviado. Verifique sua caixa de entrada.");
-    setForgotOpen(false);
   };
 
   return (
@@ -85,34 +72,14 @@ export function AuthForm() {
               <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Senha</Label>
-                {tab === "signin" && (
-                  <button
-                    type="button"
-                    onClick={() => setForgotOpen((v) => !v)}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Esqueci minha senha
-                  </button>
-                )}
-              </div>
+              <Label htmlFor="password">Senha</Label>
               <Input id="password" type="password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
+              {tab === "signin" && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Esqueceu a senha? Solicite ao administrador (Master) uma redefinição.
+                </p>
+              )}
             </div>
-
-            {forgotOpen && tab === "signin" && (
-              <div className="rounded-md border bg-muted/40 p-3 text-xs">
-                Enviaremos um link de recuperação para <strong>{email || "seu e-mail"}</strong>.
-                <div className="mt-2 flex gap-2">
-                  <Button type="button" size="sm" onClick={sendReset} disabled={loading}>
-                    Enviar link
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={() => setForgotOpen(false)}>
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
-            )}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Aguarde…" : tab === "signup" ? "Criar conta" : "Entrar"}

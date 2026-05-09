@@ -1,34 +1,29 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { handleAuthError } from "@/lib/error-handling";
+import { handleAuthError, handleSupabaseError } from "@/lib/error-handling";
+import { useAuth } from "@/lib/auth";
 
-export const Route = createFileRoute("/reset-password")({
-  component: ResetPasswordPage,
+export const Route = createFileRoute("/change-password")({
+  component: ChangePasswordPage,
 });
 
-function ResetPasswordPage() {
+function ChangePasswordPage() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    // Supabase processa o token de recuperação na URL automaticamente.
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  if (!authLoading && !user) {
+    navigate({ to: "/" });
+    return null;
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,10 +31,23 @@ function ResetPasswordPage() {
     if (password !== confirm) return toast.error("As senhas não conferem.");
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      setLoading(false);
+      return handleAuthError(error, "update");
+    }
+    if (user) {
+      const { error: profErr } = await supabase
+        .from("profiles")
+        .update({ must_change_password: false })
+        .eq("id", user.id);
+      if (profErr) {
+        setLoading(false);
+        return handleSupabaseError(profErr, "save");
+      }
+    }
     setLoading(false);
-    if (error) return handleAuthError(error, "update");
-    toast.success("Senha atualizada! Entrando…");
-    setTimeout(() => navigate({ to: "/" }), 800);
+    toast.success("Senha atualizada!");
+    navigate({ to: "/" });
   };
 
   return (
@@ -49,7 +57,7 @@ function ResetPasswordPage() {
         <div className="text-center">
           <h1 className="text-2xl font-semibold">Definir nova senha</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {ready ? "Crie uma nova senha para sua conta." : "Validando link de recuperação…"}
+            Por segurança, escolha uma senha pessoal para continuar.
           </p>
         </div>
         <form onSubmit={submit} className="space-y-3">
@@ -61,7 +69,7 @@ function ResetPasswordPage() {
             <Label htmlFor="pw2">Confirmar senha</Label>
             <Input id="pw2" type="password" minLength={6} value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
           </div>
-          <Button type="submit" className="w-full" disabled={loading || !ready}>
+          <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Salvando…" : "Atualizar senha"}
           </Button>
         </form>

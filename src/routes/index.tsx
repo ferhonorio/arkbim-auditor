@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, LogOut, ShieldCheck } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,11 +40,18 @@ function Index() {
   const dataset = useArk((s) => s.dataset);
   const { user, loading, signOut } = useAuth();
   const perms = usePermissions(user?.id ?? null);
+  const navigate = useNavigate();
   useCloudSync(user?.id ?? null);
 
   useEffect(() => {
     installGlobalErrorCapture();
   }, []);
+
+  useEffect(() => {
+    if (user && !perms.loading && perms.mustChangePassword) {
+      navigate({ to: "/change-password" });
+    }
+  }, [user, perms.loading, perms.mustChangePassword, navigate]);
 
   if (loading || (user && perms.loading)) {
     return (
@@ -86,9 +93,7 @@ function Index() {
         ? "Coordenador"
         : perms.role === "comentador"
           ? "Comentador"
-          : perms.role === "visualizador"
-            ? "Visualizador"
-            : "Sem permissão";
+          : "Sem permissão";
 
   return (
     <div className="flex min-h-screen bg-background">
