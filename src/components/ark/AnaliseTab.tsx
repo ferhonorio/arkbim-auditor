@@ -609,6 +609,21 @@ export function AnaliseTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={
+                      pageGroups.length > 0 &&
+                      pageGroups.every((g) => selectedGroupKeys.has(g.key))
+                    }
+                    onCheckedChange={(v) => {
+                      const next = new Set(selectedGroupKeys);
+                      if (v) pageGroups.forEach((g) => next.add(g.key));
+                      else pageGroups.forEach((g) => next.delete(g.key));
+                      setSelectedGroupKeys(next);
+                    }}
+                    aria-label="Selecionar página"
+                  />
+                </TableHead>
                 {groupVisible.map((c) => (
                   <TableHead key={c}>{c}</TableHead>
                 ))}
