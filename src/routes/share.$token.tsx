@@ -55,6 +55,7 @@ function SharePage() {
         return migrateComponentList({ ...raw, id: row.id, name: row.name });
       });
       setLists(parsed);
+      setProjectName((res.project_name ?? "").trim() || "ArkBIM");
       setLoading(false);
     })();
     return () => {
