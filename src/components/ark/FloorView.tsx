@@ -151,6 +151,9 @@ export function FloorView() {
               </SelectContent>
             </Select>
           </div>
+          <Button size="sm" onClick={exportLI} disabled={!aggregates.length}>
+            <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Exportar LI (.xlsx)
+          </Button>
           <Button size="sm" variant="outline" onClick={copyAll} disabled={!aggregates.length}>
             <Copy className="mr-1 h-3.5 w-3.5" /> Copiar resumo
           </Button>
