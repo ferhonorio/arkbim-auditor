@@ -151,6 +151,11 @@ export function ResolveInconsistenciesDialog({ open, onOpenChange, rule, rows, s
             Agrupado por <strong>{firstKeyCol || "(chave)"}</strong>. Para cada
             chave divergente, selecione a linha cujos valores devem prevalecer.
             Você pode editar células individuais se quiser misturar valores.
+            {scopeLabel && (
+              <span className="mt-1 block text-xs">
+                Escopo ativo: <strong>{scopeLabel}</strong> · {scopedRows.length} linha(s) consideradas.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
