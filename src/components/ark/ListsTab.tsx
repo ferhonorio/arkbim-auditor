@@ -517,6 +517,41 @@ function CategoryView({
           </table>
         </div>
       )}
+
+      <AlertDialog open={confirmUndo} onOpenChange={setConfirmUndo}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer última consolidação?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Categoria <strong>{list.name}</strong>.{" "}
+              {list.lastSnapshot ? (
+                <>
+                  Reverte {list.lastSnapshot.summary.added} novo(s),{" "}
+                  {list.lastSnapshot.summary.updated} sobrescrito(s),{" "}
+                  {list.lastSnapshot.summary.skipped} mantido(s) — salvo em{" "}
+                  {new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}.
+                </>
+              ) : null}
+              <br />
+              <strong className="text-destructive">
+                Esta ação não pode ser revertida.
+              </strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                onUndo();
+                setConfirmUndo(false);
+              }}
+            >
+              Sim, desfazer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
