@@ -43,6 +43,9 @@ export function ListsTab() {
   const setColumnWidth = useArk((s) => s.setColumnWidth);
   const removeItem = useArk((s) => s.removeListItem);
   const clearItems = useArk((s) => s.clearListItems);
+  const updateItemParam = useArk((s) => s.updateItemParam);
+  const renameItemKey = useArk((s) => s.renameItemKey);
+  const undoLast = useArk((s) => s.undoLastConsolidation);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
 
