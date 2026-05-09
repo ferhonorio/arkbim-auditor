@@ -113,8 +113,17 @@ interface ArkState {
     plan: ConsolidatePlan,
     mode: ConsolidationMode,
   ) => { added: number; updated: number; skipped: number; newFiles: string[] } | null;
+  undoLastConsolidation: (id: string) => boolean;
   removeListItem: (id: string, key: string) => void;
   clearListItems: (id: string) => void;
+  updateItemParam: (id: string, key: string, column: string, value: string) => void;
+  renameItemKey: (id: string, oldKey: string, newKey: string) => boolean;
+  setFloorAlias: (id: string, raw: string, alias: string) => void;
+  reapplyFloorAliases: (id: string) => void;
+  applyDatasetResolutions: (
+    keyColumns: string[],
+    resolutions: Array<{ keyValues: Record<string, string>; column: string; value: string }>,
+  ) => number;
 
   // Row selection (for consolidation)
   selectedRowIds: string[];
