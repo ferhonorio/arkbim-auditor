@@ -12,8 +12,24 @@ import type {
   ComponentList,
   ConsolidationMode,
   ConsolidatePlan,
+  MeasureMode,
 } from "./component-lists";
-import { commitConsolidation, planConsolidation } from "./component-lists";
+import {
+  commitConsolidation,
+  planConsolidation,
+  migrateComponentList,
+  DEFAULT_KEY_COLUMN,
+  DEFAULT_FLOOR_COLUMN,
+} from "./component-lists";
+
+export interface CreateListOpts {
+  name: string;
+  keyColumn?: string;
+  floorColumn?: string;
+  fileColumn?: string;
+  measureMode?: MeasureMode;
+  areaColumn?: string;
+}
 
 export interface ConsolidatedSnapshot {
   reference: ReferenceItem[];
