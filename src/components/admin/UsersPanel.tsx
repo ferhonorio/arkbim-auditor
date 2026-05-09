@@ -36,7 +36,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
       .select("id, email, display_name, status, created_at")
       .order("created_at", { ascending: true });
     if (error) {
-      toast.error("Falha ao carregar usuários: " + error.message);
+      handleSupabaseError(error, "load");
       setLoading(false);
       return;
     }
