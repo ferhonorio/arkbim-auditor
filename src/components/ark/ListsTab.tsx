@@ -42,6 +42,10 @@ import { PresentationView } from "@/components/ark/lists/PresentationView";
 import { ExportMenu } from "@/components/ark/lists/ExportMenu";
 import { ShareLinksDialog } from "@/components/ark/lists/ShareLinksDialog";
 import { ItemCommentsPopover } from "@/components/ark/lists/ItemCommentsPopover";
+import {
+  fetchOpenCommentSummaryByItem,
+  type ItemCommentSummary,
+} from "@/lib/comments";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 90;
@@ -310,6 +314,20 @@ function CategoryView({
 
   const [confirmUndo, setConfirmUndo] = useState(false);
   const [shareScope, setShareScope] = useState<"all" | "category" | null>(null);
+  const [commentSummaries, setCommentSummaries] = useState<Map<string, ItemCommentSummary>>(
+    new Map(),
+  );
+
+  useEffect(() => {
+    if (!canComment) return;
+    let alive = true;
+    fetchOpenCommentSummaryByItem(list.id).then((m) => {
+      if (alive) setCommentSummaries(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canComment, list.id, list.updatedAt]);
 
   const toggle = (k: string) => {
     setExpanded((prev) => {
