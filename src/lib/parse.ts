@@ -58,10 +58,11 @@ export async function parseFile(file: File): Promise<Dataset> {
       header: true,
       skipEmptyLines: true,
     });
-    const columns = res.meta.fields ?? [];
+    const rawCols = res.meta.fields ?? [];
+    const columns = rawCols.map(fixMojibake);
     const rows: Row[] = res.data.map((r) => {
       const out: Row = {};
-      for (const c of columns) out[c] = normalize(r[c]);
+      rawCols.forEach((c, i) => (out[columns[i]] = normalize(r[c])));
       return out;
     });
     return { fileName: file.name, columns, rows };
