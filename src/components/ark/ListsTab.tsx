@@ -169,6 +169,8 @@ export function ListsTab() {
 
 function CategoryView({
   list,
+  allLists,
+  onPresent,
   onRename,
   onDelete,
   onClear,
@@ -180,6 +182,8 @@ function CategoryView({
   onUndo,
 }: {
   list: ComponentList;
+  allLists: ComponentList[];
+  onPresent: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
   onClear: () => void;
