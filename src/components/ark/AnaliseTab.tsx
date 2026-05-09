@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { exportXLSX } from "@/lib/export";
 import { ConsolidateAction } from "@/components/ark/lists/ConsolidateAction";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 const RULE_COLORS = ["#fee2e2", "#fef3c7", "#dcfce7", "#dbeafe", "#f3e8ff", "#ffedd5"];
