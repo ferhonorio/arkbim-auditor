@@ -166,7 +166,7 @@ function Index() {
               </TabsContent>
             )}
             <TabsContent value="consolidada" className="mt-4">
-              <ListsTab />
+              <ListsTab readOnly={!canEdit} />
             </TabsContent>
             {canEdit && (
               <TabsContent value="auditoria" className="mt-4">
