@@ -41,12 +41,28 @@ import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
 import { PresentationView } from "@/components/ark/lists/PresentationView";
 import { ExportMenu } from "@/components/ark/lists/ExportMenu";
 import { ShareLinksDialog } from "@/components/ark/lists/ShareLinksDialog";
+import { ItemCommentsPopover } from "@/components/ark/lists/ItemCommentsPopover";
 
 const DEFAULT_COL_WIDTH = 160;
-const KEY_COL_WIDTH = 140;
-const QTY_COL_WIDTH = 100;
+const KEY_COL_WIDTH = 90;
+const QTY_COL_WIDTH = 80;
 
-export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
+/** Per-column-name default width heuristic (PT-BR + EN). */
+function defaultWidthFor(col: string): number {
+  const n = col.toLowerCase();
+  if (n === "id" || n === "type mark" || n === "tipo" || n === "código" || n === "codigo") return 90;
+  if (n.includes("qtd") || n.includes("quant") || n.includes("área") || n.includes("area")) return 80;
+  if (n.includes("descri")) return 320;
+  if (n.includes("url") || n.includes("link")) return 200;
+  if (n.includes("modelo") || n.includes("fabric") || n.includes("marca") || n.includes("manuf")) return 160;
+  if (n.includes("nome do arquivo") || n.includes("file")) return 200;
+  return DEFAULT_COL_WIDTH;
+}
+
+export function ListsTab({
+  readOnly = false,
+  canComment = false,
+}: { readOnly?: boolean; canComment?: boolean } = {}) {
   const lists = useArk((s) => s.componentLists);
   const activeId = useArk((s) => s.activeComponentListId);
   const setActive = useArk((s) => s.setActiveComponentList);
@@ -140,6 +156,7 @@ export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
             list={active}
             allLists={lists}
             readOnly={readOnly}
+            canComment={canComment}
             onPresent={() => setPresentation(true)}
             onRename={(name) => renameList(active.id, name)}
             onDelete={() => {
@@ -180,6 +197,7 @@ function CategoryView({
   list,
   allLists,
   readOnly,
+  canComment,
   onPresent,
   onRename,
   onDelete,
@@ -194,6 +212,7 @@ function CategoryView({
   list: ComponentList;
   allLists: ComponentList[];
   readOnly: boolean;
+  canComment: boolean;
   onPresent: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
@@ -248,8 +267,8 @@ function CategoryView({
   }, [list.items, search, floor, allColumns]);
 
   const headerLabel = (col: string) => list.columnAliases[col] || col;
-  const colWidth = (col: string, fallback = DEFAULT_COL_WIDTH) =>
-    list.columnWidths?.[col] ?? fallback;
+  const colWidth = (col: string, fallback?: number) =>
+    list.columnWidths?.[col] ?? fallback ?? defaultWidthFor(col);
 
   const handleRename = () => {
     const name = window.prompt("Renomear categoria:", list.name);
@@ -441,7 +460,7 @@ function CategoryView({
                 <col key={c} style={{ width: colWidth(c) }} />
               ))}
               <col style={{ width: colWidth("__qty__", QTY_COL_WIDTH) }} />
-              <col style={{ width: 32 }} />
+              <col style={{ width: 72 }} />
             </colgroup>
             <thead className="border-b">
               <tr>
@@ -536,19 +555,29 @@ function CategoryView({
                         {fmtQty(i.totalQuantity)}
                       </td>
                       <td className="p-1">
-                        {!readOnly && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-6 w-6 text-destructive"
-                            onClick={() => {
-                              if (window.confirm(`Remover "${i.key}" da lista?`))
-                                onRemoveItem(i.key);
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
+                        <div className="flex items-center justify-end gap-0.5">
+                          {canComment && (
+                            <ItemCommentsPopover
+                              listId={list.id}
+                              itemKey={i.key}
+                              canComment={canComment}
+                              canModerate={!readOnly}
+                            />
+                          )}
+                          {!readOnly && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 text-destructive"
+                              onClick={() => {
+                                if (window.confirm(`Remover "${i.key}" da lista?`))
+                                  onRemoveItem(i.key);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {open && (
