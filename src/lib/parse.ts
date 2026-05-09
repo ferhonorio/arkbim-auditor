@@ -9,9 +9,43 @@ export interface Dataset {
   rows: Row[];
 }
 
+/**
+ * Decodifica bytes tentando UTF-8 (estrito) e, se falhar, recai para
+ * windows-1252 (Latin1) — comum em arquivos exportados no Windows/Excel BR.
+ */
+function decodeSmart(buf: ArrayBuffer): string {
+  try {
+    const t = new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    return t.replace(/^\uFEFF/, "");
+  } catch {
+    return new TextDecoder("windows-1252").decode(buf).replace(/^\uFEFF/, "");
+  }
+}
+
+/**
+ * Corrige mojibake comum (UTF-8 lido como Latin1): "Ã©" -> "é", "Ã§" -> "ç",
+ * "Ã£" -> "ã", "Â°" -> "°", etc. Heurística segura: só aplica quando
+ * encontra padrões típicos e a reinterpretação resulta em UTF-8 válido.
+ */
+const MOJIBAKE_RE = /Ã[\u0080-\u00BF]|Â[\u0080-\u00BF]|â\u0080[\u0090-\u009F]/;
+export function fixMojibake(s: string): string {
+  if (!s || !MOJIBAKE_RE.test(s)) return s;
+  try {
+    const bytes = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (c > 0xff) return s; // não é Latin1 puro, aborta
+      bytes[i] = c;
+    }
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return s;
+  }
+}
+
 const normalize = (v: unknown): string => {
   if (v === null || v === undefined) return "";
-  return String(v).trim();
+  return fixMojibake(String(v)).trim();
 };
 
 export async function parseFile(file: File): Promise<Dataset> {
@@ -19,7 +53,7 @@ export async function parseFile(file: File): Promise<Dataset> {
   const buf = await file.arrayBuffer();
 
   if (ext === "csv") {
-    const text = new TextDecoder("utf-8").decode(buf);
+    const text = decodeSmart(buf);
     const res = Papa.parse<Record<string, unknown>>(text, {
       header: true,
       skipEmptyLines: true,
