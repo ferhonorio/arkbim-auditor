@@ -86,6 +86,24 @@ export function AnaliseTab() {
 
   const cols = dataset?.columns ?? [];
   const rows = dataset?.rows ?? [];
+
+  // Initialize quick selectors based on dataset columns
+  useEffect(() => {
+    if (!cols.length) return;
+    setQuickKey((cur) => {
+      if (cur && cols.includes(cur)) return cur;
+      if (cols.includes(DEFAULT_KEY_COLUMN)) return DEFAULT_KEY_COLUMN;
+      if (cols.includes("Marca de Tipo")) return "Marca de Tipo";
+      return cols[0];
+    });
+    setQuickFloor((cur) => {
+      if (cur && cols.includes(cur)) return cur;
+      if (cols.includes(DEFAULT_FLOOR_COLUMN)) return DEFAULT_FLOOR_COLUMN;
+      if (cols.includes("Pavimento")) return "Pavimento";
+      return cols[0];
+    });
+  }, [cols]);
+
   const filtered = useMemo(() => applyFilters(rows, filters), [rows, filters]);
 
   const searched = useMemo(() => {
