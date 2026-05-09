@@ -700,4 +700,47 @@ function ResizableTh({
   );
 }
 
+function CopyableContent({
+  value,
+  children,
+}: {
+  value: string;
+  children: React.ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      toast.error("Não foi possível copiar.");
+    }
+  };
+
+  return (
+    <span className="relative flex min-w-0 items-center gap-1">
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {value && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label="Copiar valor"
+          title={copied ? "Copiado!" : "Copiar"}
+          className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/cell:opacity-100"
+        >
+          {copied ? (
+            <Check className="h-3 w-3 text-emerald-600" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+        </button>
+      )}
+    </span>
+  );
+}
+
 export default ListsTab;
