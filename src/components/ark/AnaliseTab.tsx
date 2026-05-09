@@ -434,6 +434,16 @@ export function AnaliseTab() {
                 <span className="rounded bg-background/70 px-1.5 py-0.5 text-muted-foreground">
                   Linhas/chave (médio): {stats.avgRows.toFixed(1)}
                 </span>
+                {!noKey && !noCmp && stats.divergent > 0 && (r.applyWhen ?? "inconsistent") === "inconsistent" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="ml-auto h-6 text-[10px]"
+                    onClick={() => setResolveRuleId(r.id)}
+                  >
+                    Resolver inconsistências ({stats.divergent})
+                  </Button>
+                )}
               </div>
 
               {/* Inline alerts */}
