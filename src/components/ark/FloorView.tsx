@@ -194,7 +194,7 @@ export function FloorView() {
                     <table className="w-full text-sm">
                       <thead className="border-b bg-muted/30 text-xs text-muted-foreground">
                         <tr>
-                          <th className="px-3 py-1.5 text-left">{a.list.keyColumn}</th>
+                          <th className="px-3 py-1.5 text-left">{a.list.columnAliases?.[a.list.keyColumn] || a.list.keyColumn}</th>
                           <th className="px-3 py-1.5 text-right">Quantidade ({unit})</th>
                           <th className="px-3 py-1.5 text-left">Arquivos</th>
                         </tr>
