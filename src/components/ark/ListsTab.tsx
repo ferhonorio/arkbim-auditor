@@ -269,26 +269,7 @@ function CategoryView({
     setEditing(null);
   };
 
-  const handleExport = () => {
-    if (!filteredItems.length) return toast.error("Nada para exportar");
-    const rows: Row[] = filteredItems.map((i) => {
-      const r: Row = { [list.keyColumn]: i.key } as Row;
-      for (const c of allColumns) r[c] = i.params[c] ?? "";
-      r[`Total (${unit})`] = String(i.totalQuantity);
-      // breakdown by floor
-      const byFloor = new Map<string, number>();
-      for (const o of i.occurrences) byFloor.set(o.floor, (byFloor.get(o.floor) ?? 0) + o.quantity);
-      r["Pavimentos"] = Array.from(byFloor, ([f, q]) => `${f} (${fmtQty(q)})`).join(" · ");
-      return r;
-    });
-    exportXLSX(`${list.name}.xlsx`, [
-      {
-        name: list.name.slice(0, 28),
-        rows,
-        columns: [list.keyColumn, ...allColumns, `Total (${unit})`, "Pavimentos"],
-      },
-    ]);
-  };
+  const [confirmUndo, setConfirmUndo] = useState(false);
 
   const toggle = (k: string) => {
     setExpanded((prev) => {
