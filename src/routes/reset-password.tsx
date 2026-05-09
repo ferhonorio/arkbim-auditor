@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { handleAuthError } from "@/lib/error-handling";
 
 export const Route = createFileRoute("/reset-password")({
   component: ResetPasswordPage,
