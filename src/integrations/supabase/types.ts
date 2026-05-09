@@ -44,30 +44,105 @@ export type Database = {
         }
         Relationships: []
       }
+      item_comments: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          item_key: string
+          list_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          text: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          item_key: string
+          list_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          text: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          item_key?: string
+          list_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           display_name: string | null
           email: string | null
           id: string
+          must_change_password: boolean
           status: string
           updated_at: string
+          user_label: string | null
         }
         Insert: {
           created_at?: string
           display_name?: string | null
           email?: string | null
           id: string
+          must_change_password?: boolean
           status?: string
           updated_at?: string
+          user_label?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string | null
           email?: string | null
           id?: string
+          must_change_password?: boolean
           status?: string
           updated_at?: string
+          user_label?: string | null
+        }
+        Relationships: []
+      }
+      public_share_links: {
+        Row: {
+          created_at: string
+          created_by: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          list_id: string | null
+          scope: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          list_id?: string | null
+          scope?: string
+          token: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          list_id?: string | null
+          scope?: string
+          token?: string
         }
         Relationships: []
       }
@@ -99,6 +174,7 @@ export type Database = {
     Functions: {
       can_comment: { Args: { _uid: string }; Returns: boolean }
       can_edit_lists: { Args: { _uid: string }; Returns: boolean }
+      get_share_payload: { Args: { _token: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
