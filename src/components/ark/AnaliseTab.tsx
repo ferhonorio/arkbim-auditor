@@ -585,6 +585,20 @@ export function AnaliseTab() {
               defaultFloorColumn={quickFloor}
               onConsolidated={() => setSelectedGroupKeys(new Set())}
             />
+            {selectedGroupKeys.size > 0 && (
+              <div className="flex items-center gap-1 rounded-md border bg-primary/5 px-2 py-1 text-[11px]">
+                <span>
+                  <strong>{selectedGroupKeys.size}</strong> de {groups.length} grupos selecionados
+                </span>
+                <button
+                  type="button"
+                  className="text-primary underline"
+                  onClick={() => setSelectedGroupKeys(new Set())}
+                >
+                  limpar
+                </button>
+              </div>
+            )}
           </div>
         }
       >
