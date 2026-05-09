@@ -533,6 +533,22 @@ export function AnaliseTab() {
             <Button size="sm" variant="outline" onClick={exportFiltered}>
               Exportar filtrado
             </Button>
+            <div className="flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-[10px]">
+              <span className="text-muted-foreground">Chave:</span>
+              <Select value={quickKey} onValueChange={setQuickKey}>
+                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {cols.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+              <span className="ml-1 text-muted-foreground">Pavimento:</span>
+              <Select value={quickFloor} onValueChange={setQuickFloor}>
+                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {cols.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
             <ConsolidateAction
               rows={
                 selectedGroupKeys.size > 0
@@ -549,6 +565,8 @@ export function AnaliseTab() {
                       .reduce((s, g) => s + g.rawRows.length, 0)
                   : 0
               }
+              defaultKeyColumn={quickKey}
+              defaultFloorColumn={quickFloor}
               onConsolidated={() => setSelectedGroupKeys(new Set())}
             />
           </div>
