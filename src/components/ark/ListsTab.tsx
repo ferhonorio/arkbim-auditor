@@ -44,8 +44,20 @@ import { ShareLinksDialog } from "@/components/ark/lists/ShareLinksDialog";
 import { ItemCommentsPopover } from "@/components/ark/lists/ItemCommentsPopover";
 
 const DEFAULT_COL_WIDTH = 160;
-const KEY_COL_WIDTH = 140;
-const QTY_COL_WIDTH = 100;
+const KEY_COL_WIDTH = 90;
+const QTY_COL_WIDTH = 80;
+
+/** Per-column-name default width heuristic (PT-BR + EN). */
+function defaultWidthFor(col: string): number {
+  const n = col.toLowerCase();
+  if (n === "id" || n === "type mark" || n === "tipo" || n === "código" || n === "codigo") return 90;
+  if (n.includes("qtd") || n.includes("quant") || n.includes("área") || n.includes("area")) return 80;
+  if (n.includes("descri")) return 320;
+  if (n.includes("url") || n.includes("link")) return 200;
+  if (n.includes("modelo") || n.includes("fabric") || n.includes("marca") || n.includes("manuf")) return 160;
+  if (n.includes("nome do arquivo") || n.includes("file")) return 200;
+  return DEFAULT_COL_WIDTH;
+}
 
 export function ListsTab({
   readOnly = false,
