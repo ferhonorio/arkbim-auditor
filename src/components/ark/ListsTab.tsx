@@ -3,13 +3,13 @@ import {
   Plus,
   Trash2,
   Pencil,
-  Download,
   ChevronDown,
   ChevronRight,
   FolderOpen,
   Search as SearchIcon,
   Undo2,
   Map as MapIcon,
+  Presentation,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -22,11 +22,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { exportXLSX } from "@/lib/export";
 import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
-import type { Row } from "@/lib/parse";
 import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
+import { PresentationView } from "@/components/ark/lists/PresentationView";
+import { ExportMenu } from "@/components/ark/lists/ExportMenu";
 
 const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
