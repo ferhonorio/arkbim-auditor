@@ -150,6 +150,9 @@ function CategoryView({
   onSetAlias,
   onSetWidth,
   onRemoveItem,
+  onUpdateParam,
+  onRenameKey,
+  onUndo,
 }: {
   list: ComponentList;
   onRename: (name: string) => void;
@@ -158,10 +161,16 @@ function CategoryView({
   onSetAlias: (col: string, alias: string) => void;
   onSetWidth: (col: string, width: number) => void;
   onRemoveItem: (key: string) => void;
+  onUpdateParam: (key: string, col: string, val: string) => void;
+  onRenameKey: (oldKey: string, newKey: string) => boolean;
+  onUndo: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [floor, setFloor] = useState<string>("__all__");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showFloorMap, setShowFloorMap] = useState(false);
+  const [editing, setEditing] = useState<{ key: string; col: string } | null>(null);
+  const [editVal, setEditVal] = useState("");
 
   const unit = list.measureMode === "area" ? "m²" : "un";
   const qtyHeader = list.measureMode === "area" ? "Área (m²)" : "Qtd (un)";
