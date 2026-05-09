@@ -291,10 +291,16 @@ export const useArk = create<ArkState>()(
         const sourceFiles = Array.from(
           new Set([...list.sourceFiles, ...outcome.newFiles]),
         );
+        const snapshot = {
+          items: list.items,
+          sourceFiles: list.sourceFiles,
+          savedAt: Date.now(),
+          summary: { added: outcome.added, updated: outcome.updated, skipped: outcome.skipped },
+        };
         set((s) => ({
           componentLists: s.componentLists.map((l) =>
             l.id === id
-              ? { ...l, items: outcome.items, sourceFiles, updatedAt: Date.now() }
+              ? { ...l, items: outcome.items, sourceFiles, lastSnapshot: snapshot, updatedAt: Date.now() }
               : l,
           ),
         }));
@@ -304,6 +310,19 @@ export const useArk = create<ArkState>()(
           skipped: outcome.skipped,
           newFiles: outcome.newFiles,
         };
+      },
+      undoLastConsolidation: (id) => {
+        const list = get().componentLists.find((l) => l.id === id);
+        if (!list?.lastSnapshot) return false;
+        const snap = list.lastSnapshot;
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id === id
+              ? { ...l, items: snap.items, sourceFiles: snap.sourceFiles, lastSnapshot: undefined, updatedAt: Date.now() }
+              : l,
+          ),
+        }));
+        return true;
       },
       removeListItem: (id, key) =>
         set((s) => ({
@@ -325,6 +344,90 @@ export const useArk = create<ArkState>()(
               : l,
           ),
         })),
+      updateItemParam: (id, key, column, value) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            return {
+              ...l,
+              items: l.items.map((i) => {
+                if (i.key !== key) return i;
+                const params = { ...i.params, [column]: value };
+                const columns = i.columns.includes(column) ? i.columns : [...i.columns, column];
+                return { ...i, params, columns, lastUpdatedAt: Date.now() };
+              }),
+              updatedAt: Date.now(),
+            };
+          }),
+        })),
+      renameItemKey: (id, oldKey, newKey) => {
+        const trimmed = newKey.trim();
+        if (!trimmed || oldKey === trimmed) return false;
+        const list = get().componentLists.find((l) => l.id === id);
+        if (!list) return false;
+        if (list.items.some((i) => i.key === trimmed)) return false;
+        set((s) => ({
+          componentLists: s.componentLists.map((l) =>
+            l.id !== id
+              ? l
+              : {
+                  ...l,
+                  items: l.items.map((i) =>
+                    i.key === oldKey ? { ...i, key: trimmed, lastUpdatedAt: Date.now() } : i,
+                  ),
+                  updatedAt: Date.now(),
+                },
+          ),
+        }));
+        return true;
+      },
+      setFloorAlias: (id, raw, alias) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            const aliases = { ...(l.floorAliases ?? {}) };
+            if (alias.trim()) aliases[raw] = alias.trim();
+            else delete aliases[raw];
+            return { ...l, floorAliases: aliases, updatedAt: Date.now() };
+          }),
+        })),
+      reapplyFloorAliases: (id) =>
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            const items = applyFloorAliasesToItems(l.items, l.floorAliases ?? {});
+            return { ...l, items, updatedAt: Date.now() };
+          }),
+        })),
+      applyDatasetResolutions: (keyColumns, resolutions) => {
+        const ds = get().dataset;
+        if (!ds || !keyColumns.length || !resolutions.length) return 0;
+        const buildKey = (r: Row) => keyColumns.map((c) => (r[c] ?? "").trim()).join("\u0001");
+        const byKey = new Map<string, Map<string, string>>();
+        for (const res of resolutions) {
+          const k = keyColumns.map((c) => (res.keyValues[c] ?? "").trim()).join("\u0001");
+          if (!byKey.has(k)) byKey.set(k, new Map());
+          byKey.get(k)!.set(res.column, res.value);
+        }
+        let changed = 0;
+        const rows = ds.rows.map((r) => {
+          const k = buildKey(r);
+          const cols = byKey.get(k);
+          if (!cols) return r;
+          let touched = false;
+          const next: Row = { ...r };
+          for (const [c, v] of cols) {
+            if ((next[c] ?? "") !== v) {
+              next[c] = v;
+              touched = true;
+            }
+          }
+          if (touched) changed++;
+          return touched ? next : r;
+        });
+        set({ dataset: { ...ds, rows } });
+        return changed;
+      },
 
       selectedRowIds: [],
       setSelectedRowIds: (ids) => set({ selectedRowIds: ids }),
