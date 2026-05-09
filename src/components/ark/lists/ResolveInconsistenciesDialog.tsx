@@ -20,6 +20,10 @@ interface Props {
   open: boolean;
   onOpenChange: (b: boolean) => void;
   rule: VisualRule;
+  /** Rows already filtered (filtros + agrupamento). Defaults to full dataset. */
+  rows?: Row[];
+  /** Optional label describing active scope (filters/grouping) for context. */
+  scopeLabel?: string;
 }
 
 interface Variant {
@@ -28,14 +32,19 @@ interface Variant {
   count: number;
 }
 
-export function ResolveInconsistenciesDialog({ open, onOpenChange, rule }: Props) {
+export function ResolveInconsistenciesDialog({ open, onOpenChange, rule, rows, scopeLabel }: Props) {
   const dataset = useArk((s) => s.dataset);
   const apply = useArk((s) => s.applyDatasetResolutions);
 
+  const scopedRows = useMemo<Row[]>(
+    () => rows ?? dataset?.rows ?? [],
+    [rows, dataset],
+  );
+
   const evals = useMemo(() => {
-    if (!dataset) return new Map<string, RuleKeyEval>();
-    return evaluateRule(rule, dataset.rows);
-  }, [dataset, rule]);
+    if (!scopedRows.length) return new Map<string, RuleKeyEval>();
+    return evaluateRule(rule, scopedRows);
+  }, [scopedRows, rule]);
 
   const inconsistentKeys = useMemo(
     () => Array.from(evals.entries()).filter(([, ev]) => ev.comparable && ev.inconsistent),
@@ -56,23 +65,23 @@ export function ResolveInconsistenciesDialog({ open, onOpenChange, rule }: Props
     );
   }, [inconsistentKeys, firstKeyCol]);
 
-  // Compute variants per inconsistent key from the dataset rows
+  // Compute variants per inconsistent key from the SCOPED rows (filters + grouping).
   const variantsByKey = useMemo(() => {
     const out = new Map<string, Variant[]>();
-    if (!dataset) return out;
+    if (!scopedRows.length) return out;
     const cmp = rule.compareColumns;
     const keyCols = rule.keyColumns;
     const buildKey = (r: Row) => keyCols.map((c) => (r[c] ?? "").trim()).join("\u0001");
     const rowsByKey = new Map<string, Row[]>();
-    for (const r of dataset.rows) {
+    for (const r of scopedRows) {
       const k = buildKey(r);
       if (!evals.get(k)?.inconsistent) continue;
       if (!rowsByKey.has(k)) rowsByKey.set(k, []);
       rowsByKey.get(k)!.push(r);
     }
-    for (const [k, rows] of rowsByKey) {
+    for (const [k, rs] of rowsByKey) {
       const map = new Map<string, Variant>();
-      for (const r of rows) {
+      for (const r of rs) {
         const values: Record<string, string> = {};
         for (const c of cmp) values[c] = (r[c] ?? "").trim();
         const sig = cmp.map((c) => values[c]).join("\u0001");
@@ -86,7 +95,7 @@ export function ResolveInconsistenciesDialog({ open, onOpenChange, rule }: Props
       );
     }
     return out;
-  }, [dataset, evals, rule]);
+  }, [scopedRows, evals, rule]);
 
   // expanded outer (first-key) groups + inner subkeys
   const [expandedFirst, setExpandedFirst] = useState<Set<string>>(new Set());
@@ -142,6 +151,11 @@ export function ResolveInconsistenciesDialog({ open, onOpenChange, rule }: Props
             Agrupado por <strong>{firstKeyCol || "(chave)"}</strong>. Para cada
             chave divergente, selecione a linha cujos valores devem prevalecer.
             Você pode editar células individuais se quiser misturar valores.
+            {scopeLabel && (
+              <span className="mt-1 block text-xs">
+                Escopo ativo: <strong>{scopeLabel}</strong> · {scopedRows.length} linha(s) consideradas.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 

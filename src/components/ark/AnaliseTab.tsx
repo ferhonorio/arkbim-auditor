@@ -822,6 +822,12 @@ export function AnaliseTab() {
             open={!!resolveRuleId}
             onOpenChange={(b) => !b && setResolveRuleId(null)}
             rule={rule}
+            rows={ruleFiltered}
+            scopeLabel={
+              filters.length || groupBy.length
+                ? `Filtros (${filters.length}) · Agrupamento: ${groupBy.join(", ") || "—"}`
+                : undefined
+            }
           />
         );
       })()}
