@@ -10,6 +10,8 @@ import {
   Undo2,
   Map as MapIcon,
   Presentation,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -42,7 +44,7 @@ const DEFAULT_COL_WIDTH = 160;
 const KEY_COL_WIDTH = 140;
 const QTY_COL_WIDTH = 100;
 
-export function ListsTab() {
+export function ListsTab({ readOnly = false }: { readOnly?: boolean } = {}) {
   const lists = useArk((s) => s.componentLists);
   const activeId = useArk((s) => s.activeComponentListId);
   const setActive = useArk((s) => s.setActiveComponentList);
@@ -86,13 +88,17 @@ export function ListsTab() {
       <aside className="flex w-64 shrink-0 flex-col gap-2 rounded-lg border bg-card p-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Categorias</h3>
-          <Button size="sm" variant="outline" onClick={handleCreate}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> Nova
-          </Button>
+          {!readOnly && (
+            <Button size="sm" variant="outline" onClick={handleCreate}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> Nova
+            </Button>
+          )}
         </div>
         {lists.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Nenhuma categoria ainda. Crie uma e consolide dados pela aba Análise.
+            {readOnly
+              ? "Nenhuma categoria disponível."
+              : "Nenhuma categoria ainda. Crie uma e consolide dados pela aba Análise."}
           </p>
         )}
         <div className="flex-1 space-y-1 overflow-auto">
@@ -131,6 +137,7 @@ export function ListsTab() {
           <CategoryView
             list={active}
             allLists={lists}
+            readOnly={readOnly}
             onPresent={() => setPresentation(true)}
             onRename={(name) => renameList(active.id, name)}
             onDelete={() => {
@@ -170,6 +177,7 @@ export function ListsTab() {
 function CategoryView({
   list,
   allLists,
+  readOnly,
   onPresent,
   onRename,
   onDelete,
@@ -183,6 +191,7 @@ function CategoryView({
 }: {
   list: ComponentList;
   allLists: ComponentList[];
+  readOnly: boolean;
   onPresent: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
@@ -292,9 +301,11 @@ function CategoryView({
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold">{list.name}</h2>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRename}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
+            {!readOnly && (
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRename}>
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {list.items.length} itens · {allFloors.length} pavimentos · chave:{" "}
@@ -314,26 +325,30 @@ function CategoryView({
           >
             <Presentation className="mr-1 h-3.5 w-3.5" /> Modo apresentação
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConfirmUndo(true)}
-            disabled={!list.lastSnapshot}
-            title={
-              list.lastSnapshot
-                ? `Reverte ${list.lastSnapshot.summary.added} novo(s) / ${list.lastSnapshot.summary.updated} sobrescrito(s) — ${new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}`
-                : "Nada para desfazer"
-            }
-          >
-            <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer última
-          </Button>
-          <Button
-            size="sm"
-            variant={showFloorMap ? "default" : "outline"}
-            onClick={() => setShowFloorMap((v) => !v)}
-          >
-            <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
-          </Button>
+          {!readOnly && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setConfirmUndo(true)}
+              disabled={!list.lastSnapshot}
+              title={
+                list.lastSnapshot
+                  ? `Reverte ${list.lastSnapshot.summary.added} novo(s) / ${list.lastSnapshot.summary.updated} sobrescrito(s) — ${new Date(list.lastSnapshot.savedAt).toLocaleString("pt-BR")}`
+                  : "Nada para desfazer"
+              }
+            >
+              <Undo2 className="mr-1 h-3.5 w-3.5" /> Desfazer última
+            </Button>
+          )}
+          {!readOnly && (
+            <Button
+              size="sm"
+              variant={showFloorMap ? "default" : "outline"}
+              onClick={() => setShowFloorMap((v) => !v)}
+            >
+              <MapIcon className="mr-1 h-3.5 w-3.5" /> Pavimentos
+            </Button>
+          )}
           <ExportMenu
             list={list}
             allLists={allLists}
@@ -344,12 +359,16 @@ function CategoryView({
               return Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
             }}
           />
-          <Button size="sm" variant="outline" onClick={onClear}>
-            Limpar lista
-          </Button>
-          <Button size="sm" variant="destructive" onClick={onDelete}>
-            <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir categoria
-          </Button>
+          {!readOnly && (
+            <Button size="sm" variant="outline" onClick={onClear}>
+              Limpar lista
+            </Button>
+          )}
+          {!readOnly && (
+            <Button size="sm" variant="destructive" onClick={onDelete}>
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> Excluir categoria
+            </Button>
+          )}
         </div>
       </div>
 
@@ -418,7 +437,7 @@ function CategoryView({
                     origin={c}
                     width={colWidth(c)}
                     onResize={(w) => onSetWidth(c, w)}
-                    onRename={() => handleHeaderRename(c)}
+                    onRename={readOnly ? undefined : () => handleHeaderRename(c)}
                   />
                 ))}
                 <ResizableTh
@@ -452,20 +471,23 @@ function CategoryView({
                         </Button>
                       </td>
                       <td
-                        className="truncate p-2 align-middle font-medium"
-                        title="Duplo-clique para renomear chave"
-                        onDoubleClick={() => handleRenameKey(i.key)}
+                        className="group/cell truncate p-2 align-middle font-medium"
+                        title={readOnly ? i.key : "Duplo-clique para renomear chave"}
+                        onDoubleClick={readOnly ? undefined : () => handleRenameKey(i.key)}
                       >
-                        {i.key}
+                        <CopyableContent value={i.key}>{i.key}</CopyableContent>
                       </td>
                       {allColumns.map((c) => {
-                        const isEditing = editing?.key === i.key && editing.col === c;
+                        const isEditing = !readOnly && editing?.key === i.key && editing.col === c;
+                        const value = i.params[c] ?? "";
                         return (
                           <td
                             key={c}
-                            className="truncate p-1 align-middle text-xs"
-                            title={i.params[c] ?? ""}
-                            onDoubleClick={() => startEdit(i.key, c, i.params[c] ?? "")}
+                            className="group/cell truncate p-1 align-middle text-xs"
+                            title={value}
+                            onDoubleClick={
+                              readOnly ? undefined : () => startEdit(i.key, c, value)
+                            }
                           >
                             {isEditing ? (
                               <Input
@@ -480,7 +502,9 @@ function CategoryView({
                                 className="h-6 text-xs"
                               />
                             ) : (
-                              <span className="block truncate p-1">{i.params[c] ?? ""}</span>
+                              <CopyableContent value={value}>
+                                <span className="block truncate p-1">{value}</span>
+                              </CopyableContent>
                             )}
                           </td>
                         );
@@ -489,17 +513,19 @@ function CategoryView({
                         {fmtQty(i.totalQuantity)}
                       </td>
                       <td className="p-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => {
-                            if (window.confirm(`Remover "${i.key}" da lista?`))
-                              onRemoveItem(i.key);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {!readOnly && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-destructive"
+                            onClick={() => {
+                              if (window.confirm(`Remover "${i.key}" da lista?`))
+                                onRemoveItem(i.key);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                     {open && (
@@ -671,6 +697,49 @@ function ResizableTh({
         title="Arrastar para redimensionar · duplo-clique para padrão"
       />
     </th>
+  );
+}
+
+function CopyableContent({
+  value,
+  children,
+}: {
+  value: string;
+  children: React.ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      toast.error("Não foi possível copiar.");
+    }
+  };
+
+  return (
+    <span className="relative flex min-w-0 items-center gap-1">
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {value && (
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label="Copiar valor"
+          title={copied ? "Copiado!" : "Copiar"}
+          className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover/cell:opacity-100"
+        >
+          {copied ? (
+            <Check className="h-3 w-3 text-emerald-600" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+        </button>
+      )}
+    </span>
   );
 }
 
