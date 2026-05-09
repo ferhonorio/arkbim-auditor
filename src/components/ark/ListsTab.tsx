@@ -217,10 +217,33 @@ function CategoryView({
   };
 
   const handleHeaderRename = (col: string) => {
+    if (col === list.keyColumn) {
+      toast.error("A coluna chave não pode ser renomeada");
+      return;
+    }
     const cur = list.columnAliases[col] || "";
     const next = window.prompt(`Renomear coluna "${col}":`, cur);
     if (next === null) return;
     onSetAlias(col, next.trim());
+  };
+
+  const handleRenameKey = (oldKey: string) => {
+    const next = window.prompt(`Renomear ${list.keyColumn} (chave):`, oldKey);
+    if (next == null) return;
+    const t = next.trim();
+    if (!t || t === oldKey) return;
+    onRenameKey(oldKey, t);
+  };
+
+  const startEdit = (key: string, col: string, value: string) => {
+    if (col === list.keyColumn) return;
+    setEditing({ key, col });
+    setEditVal(value);
+  };
+  const commitEdit = () => {
+    if (!editing) return;
+    onUpdateParam(editing.key, editing.col, editVal);
+    setEditing(null);
   };
 
   const handleExport = () => {
