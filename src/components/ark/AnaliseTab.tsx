@@ -509,8 +509,22 @@ export function AnaliseTab() {
               Exportar filtrado
             </Button>
             <ConsolidateAction
-              rows={ruleFiltered}
+              rows={
+                selectedGroupKeys.size > 0
+                  ? groups
+                      .filter((g) => selectedGroupKeys.has(g.key))
+                      .flatMap((g) => g.rawRows)
+                  : ruleFiltered
+              }
               columns={Array.from(new Set([...groupBy, ...concatCols]))}
+              selectedCount={
+                selectedGroupKeys.size > 0
+                  ? groups
+                      .filter((g) => selectedGroupKeys.has(g.key))
+                      .reduce((s, g) => s + g.rawRows.length, 0)
+                  : 0
+              }
+              onConsolidated={() => setSelectedGroupKeys(new Set())}
             />
           </div>
         }
