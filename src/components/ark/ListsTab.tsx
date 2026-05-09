@@ -130,6 +130,8 @@ export function ListsTab() {
         ) : (
           <CategoryView
             list={active}
+            allLists={lists}
+            onPresent={() => setPresentation(true)}
             onRename={(name) => renameList(active.id, name)}
             onDelete={() => {
               if (window.confirm(`Excluir categoria "${active.name}"?`)) {
