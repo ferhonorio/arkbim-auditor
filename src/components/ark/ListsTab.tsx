@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useRef, useState, useEffect } from "react";
 import {
   Plus,
   Trash2,
@@ -19,25 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { exportXLSX } from "@/lib/export";
-import { KEY_COLUMN, type ComponentList } from "@/lib/component-lists";
+import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
 import type { Row } from "@/lib/parse";
+
+const DEFAULT_COL_WIDTH = 160;
+const KEY_COL_WIDTH = 140;
+const QTY_COL_WIDTH = 100;
 
 export function ListsTab() {
   const lists = useArk((s) => s.componentLists);
@@ -47,16 +37,19 @@ export function ListsTab() {
   const renameList = useArk((s) => s.renameComponentList);
   const deleteList = useArk((s) => s.deleteComponentList);
   const setColumnAlias = useArk((s) => s.setColumnAlias);
+  const setColumnWidth = useArk((s) => s.setColumnWidth);
   const removeItem = useArk((s) => s.removeListItem);
   const clearItems = useArk((s) => s.clearListItems);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
 
   const handleCreate = () => {
-    const name = window.prompt("Nome da categoria (ex.: Portas, Janelas, Mobiliário):");
+    const name = window.prompt(
+      "Nome da categoria (ex.: Portas, Janelas):\n\nDica: para configurar coluna chave, pavimento e modo (item/área), crie a categoria pela aba Análise → Consolidar.",
+    );
     if (!name?.trim()) return;
     createList(name.trim());
-    toast.success(`Categoria "${name.trim()}" criada`);
+    toast.success(`Categoria "${name.trim()}" criada com defaults (Type Mark / Nome do arquivo / por item)`);
   };
 
   return (
@@ -91,6 +84,9 @@ export function ListsTab() {
                   {l.items.length}
                 </Badge>
               </div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                {l.keyColumn} · {l.measureMode === "area" ? "m²" : "un"}
+              </div>
             </button>
           ))}
         </div>
@@ -119,6 +115,7 @@ export function ListsTab() {
               }
             }}
             onSetAlias={(col, alias) => setColumnAlias(active.id, col, alias)}
+            onSetWidth={(col, w) => setColumnWidth(active.id, col, w)}
             onRemoveItem={(key) => removeItem(active.id, key)}
           />
         )}
@@ -133,6 +130,7 @@ function CategoryView({
   onDelete,
   onClear,
   onSetAlias,
+  onSetWidth,
   onRemoveItem,
 }: {
   list: ComponentList;
@@ -140,11 +138,20 @@ function CategoryView({
   onDelete: () => void;
   onClear: () => void;
   onSetAlias: (col: string, alias: string) => void;
+  onSetWidth: (col: string, width: number) => void;
   onRemoveItem: (key: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [floor, setFloor] = useState<string>("__all__");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const unit = list.measureMode === "area" ? "m²" : "un";
+  const qtyHeader = list.measureMode === "area" ? "Área (m²)" : "Qtd (un)";
+
+  const fmtQty = (n: number) =>
+    list.measureMode === "area"
+      ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+      : n.toLocaleString("pt-BR");
 
   const allColumns = useMemo(() => {
     const set = new Set<string>();
@@ -154,14 +161,14 @@ function CategoryView({
 
   const allFloors = useMemo(() => {
     const set = new Set<string>();
-    for (const i of list.items) for (const o of i.occurrences) set.add(o.file);
+    for (const i of list.items) for (const o of i.occurrences) set.add(o.floor);
     return Array.from(set).sort();
   }, [list.items]);
 
   const filteredItems = useMemo(() => {
     const s = search.trim().toLowerCase();
     return list.items.filter((i) => {
-      if (floor !== "__all__" && !i.occurrences.some((o) => o.file === floor)) {
+      if (floor !== "__all__" && !i.occurrences.some((o) => o.floor === floor)) {
         return false;
       }
       if (!s) return true;
@@ -174,6 +181,8 @@ function CategoryView({
   }, [list.items, search, floor, allColumns]);
 
   const headerLabel = (col: string) => list.columnAliases[col] || col;
+  const colWidth = (col: string, fallback = DEFAULT_COL_WIDTH) =>
+    list.columnWidths?.[col] ?? fallback;
 
   const handleRename = () => {
     const name = window.prompt("Renomear categoria:", list.name);
@@ -190,17 +199,20 @@ function CategoryView({
   const handleExport = () => {
     if (!filteredItems.length) return toast.error("Nada para exportar");
     const rows: Row[] = filteredItems.map((i) => {
-      const r: Row = { [KEY_COLUMN]: i.key } as Row;
+      const r: Row = { [list.keyColumn]: i.key } as Row;
       for (const c of allColumns) r[c] = i.params[c] ?? "";
-      r["Quantidade total"] = String(i.totalQuantity);
-      r["Pavimentos"] = i.occurrences.map((o) => `${o.file} (${o.quantity})`).join(" · ");
+      r[`Total (${unit})`] = String(i.totalQuantity);
+      // breakdown by floor
+      const byFloor = new Map<string, number>();
+      for (const o of i.occurrences) byFloor.set(o.floor, (byFloor.get(o.floor) ?? 0) + o.quantity);
+      r["Pavimentos"] = Array.from(byFloor, ([f, q]) => `${f} (${fmtQty(q)})`).join(" · ");
       return r;
     });
     exportXLSX(`${list.name}.xlsx`, [
       {
         name: list.name.slice(0, 28),
         rows,
-        columns: [KEY_COLUMN, ...allColumns, "Quantidade total", "Pavimentos"],
+        columns: [list.keyColumn, ...allColumns, `Total (${unit})`, "Pavimentos"],
       },
     ]);
   };
@@ -225,8 +237,13 @@ function CategoryView({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            {list.items.length} itens · {allFloors.length} pavimentos · atualizado{" "}
-            {new Date(list.updatedAt).toLocaleString("pt-BR")}
+            {list.items.length} itens · {allFloors.length} pavimentos · chave:{" "}
+            <strong>{list.keyColumn}</strong> · pavimento:{" "}
+            <strong>{list.floorColumn}</strong> · modo:{" "}
+            <strong>
+              {list.measureMode === "area" ? `por área (${list.areaColumn})` : "por item"}
+            </strong>{" "}
+            · atualizado {new Date(list.updatedAt).toLocaleString("pt-BR")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -248,7 +265,7 @@ function CategoryView({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar Type Mark ou parâmetro…"
+            placeholder={`Buscar ${list.keyColumn} ou parâmetro…`}
             className="h-8 w-72 pl-7 text-xs"
           />
         </div>
@@ -271,40 +288,61 @@ function CategoryView({
         <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
           Esta categoria está vazia. Vá até a aba <strong>Análise & Agrupamentos</strong>,
           filtre os dados desejados e use o botão{" "}
-          <strong>Consolidar dados filtrados</strong> selecionando esta categoria.
+          <strong>Consolidar</strong> selecionando esta categoria.
         </div>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8" />
-                <TableHead className="font-semibold">{KEY_COLUMN}</TableHead>
+        <div className="overflow-auto rounded-md border">
+          <table
+            className="w-full caption-bottom text-sm"
+            style={{ tableLayout: "fixed" }}
+          >
+            <colgroup>
+              <col style={{ width: 32 }} />
+              <col style={{ width: colWidth(list.keyColumn, KEY_COL_WIDTH) }} />
+              {allColumns.map((c) => (
+                <col key={c} style={{ width: colWidth(c) }} />
+              ))}
+              <col style={{ width: colWidth("__qty__", QTY_COL_WIDTH) }} />
+              <col style={{ width: 32 }} />
+            </colgroup>
+            <thead className="border-b">
+              <tr>
+                <th />
+                <ResizableTh
+                  label={headerLabel(list.keyColumn)}
+                  origin={list.keyColumn}
+                  width={colWidth(list.keyColumn, KEY_COL_WIDTH)}
+                  onResize={(w) => onSetWidth(list.keyColumn, w)}
+                  onRename={() => handleHeaderRename(list.keyColumn)}
+                  bold
+                />
                 {allColumns.map((c) => (
-                  <TableHead
+                  <ResizableTh
                     key={c}
-                    className="group cursor-pointer select-none whitespace-nowrap"
-                    onDoubleClick={() => handleHeaderRename(c)}
-                    title={`Duplo-clique para renomear (origem: ${c})`}
-                  >
-                    <span className="flex items-center gap-1">
-                      {headerLabel(c)}
-                      <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-50" />
-                    </span>
-                  </TableHead>
+                    label={headerLabel(c)}
+                    origin={c}
+                    width={colWidth(c)}
+                    onResize={(w) => onSetWidth(c, w)}
+                    onRename={() => handleHeaderRename(c)}
+                  />
                 ))}
-                <TableHead className="text-right">Qtd</TableHead>
-                <TableHead>Pavimentos</TableHead>
-                <TableHead className="w-8" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+                <ResizableTh
+                  label={qtyHeader}
+                  origin="__qty__"
+                  width={colWidth("__qty__", QTY_COL_WIDTH)}
+                  onResize={(w) => onSetWidth("__qty__", w)}
+                  align="right"
+                />
+                <th />
+              </tr>
+            </thead>
+            <tbody className="[&_tr:last-child]:border-0">
               {filteredItems.map((i) => {
                 const open = expanded.has(i.key);
                 return (
                   <Fragment key={i.key}>
-                    <TableRow>
-                      <TableCell className="p-1">
+                    <tr className="border-b transition-colors hover:bg-muted/50">
+                      <td className="p-1">
                         <Button
                           size="icon"
                           variant="ghost"
@@ -317,43 +355,17 @@ function CategoryView({
                             <ChevronRight className="h-3.5 w-3.5" />
                           )}
                         </Button>
-                      </TableCell>
-                      <TableCell className="font-medium">{i.key}</TableCell>
+                      </td>
+                      <td className="truncate p-2 align-middle font-medium">{i.key}</td>
                       {allColumns.map((c) => (
-                        <TableCell key={c} className="text-xs">
+                        <td key={c} className="truncate p-2 align-middle text-xs" title={i.params[c] ?? ""}>
                           {i.params[c] ?? ""}
-                        </TableCell>
+                        </td>
                       ))}
-                      <TableCell className="text-right font-mono text-xs">
-                        {i.totalQuantity}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <TooltipProvider>
-                            {i.occurrences.map((o) => (
-                              <Tooltip key={o.file}>
-                                <TooltipTrigger asChild>
-                                  <Badge variant="secondary" className="text-[10px]">
-                                    {o.file} · {o.quantity}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <div className="text-xs">
-                                    {o.quantity} ocorrência(s)
-                                    {o.ids.length > 0 && (
-                                      <div className="mt-1 max-w-[280px] truncate text-[10px] opacity-70">
-                                        IDs: {o.ids.slice(0, 8).join(", ")}
-                                        {o.ids.length > 8 ? "…" : ""}
-                                      </div>
-                                    )}
-                                  </div>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </TooltipProvider>
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-1">
+                      <td className="p-2 text-right font-mono text-xs">
+                        {fmtQty(i.totalQuantity)}
+                      </td>
+                      <td className="p-1">
                         <Button
                           size="icon"
                           variant="ghost"
@@ -365,35 +377,142 @@ function CategoryView({
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                     {open && (
-                      <TableRow className="bg-muted/30">
-                        <TableCell />
-                        <TableCell colSpan={allColumns.length + 4}>
-                          <div className="space-y-1 py-2 text-xs">
-                            <div className="font-semibold">Ocorrências por pavimento</div>
-                            {i.occurrences.map((o) => (
-                              <div key={o.file} className="flex gap-3">
-                                <span className="min-w-[200px] font-medium">{o.file}</span>
-                                <span>Qtd: {o.quantity}</span>
-                                <span className="text-muted-foreground">
-                                  IDs: {o.ids.join(", ") || "—"}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <tr className="bg-muted/30">
+                        <td />
+                        <td colSpan={allColumns.length + 3} className="p-3">
+                          <FloorBreakdown item={i} fmt={fmtQty} unit={unit} />
+                        </td>
+                      </tr>
                     )}
                   </Fragment>
                 );
               })}
-            </TableBody>
-          </Table>
+            </tbody>
+          </table>
         </div>
       )}
     </div>
+  );
+}
+
+function FloorBreakdown({
+  item,
+  fmt,
+  unit,
+}: {
+  item: ConsolidatedItem;
+  fmt: (n: number) => string;
+  unit: string;
+}) {
+  const grouped = useMemo(() => {
+    const m = new Map<string, { quantity: number; files: { file: string; quantity: number; ids: string[] }[] }>();
+    for (const o of item.occurrences) {
+      if (!m.has(o.floor)) m.set(o.floor, { quantity: 0, files: [] });
+      const g = m.get(o.floor)!;
+      g.quantity += o.quantity;
+      g.files.push({ file: o.file, quantity: o.quantity, ids: o.ids });
+    }
+    return Array.from(m, ([floor, v]) => ({ floor, ...v })).sort((a, b) =>
+      a.floor.localeCompare(b.floor),
+    );
+  }, [item]);
+
+  return (
+    <div className="space-y-2 text-xs">
+      <div className="font-semibold">Subgrupos por pavimento</div>
+      <div className="grid gap-2 md:grid-cols-2">
+        {grouped.map((g) => (
+          <div key={g.floor} className="rounded border bg-background p-2">
+            <div className="flex items-center justify-between font-medium">
+              <span>{g.floor}</span>
+              <span className="font-mono">{fmt(g.quantity)} {unit}</span>
+            </div>
+            <ul className="mt-1 space-y-0.5 text-[10px] text-muted-foreground">
+              {g.files.map((f) => (
+                <li key={f.file} className="flex justify-between gap-2">
+                  <span className="truncate">{f.file}</span>
+                  <span className="shrink-0 font-mono">{fmt(f.quantity)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResizableTh({
+  label,
+  origin,
+  width,
+  onResize,
+  onRename,
+  bold,
+  align,
+}: {
+  label: string;
+  origin: string;
+  width: number;
+  onResize: (w: number) => void;
+  onRename?: () => void;
+  bold?: boolean;
+  align?: "right";
+}) {
+  const ref = useRef<HTMLTableCellElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const startXRef = useRef(0);
+  const startWRef = useRef(0);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - startXRef.current;
+      const w = Math.max(60, startWRef.current + dx);
+      onResize(w);
+    };
+    const onUp = () => setDragging(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging, onResize]);
+
+  return (
+    <th
+      ref={ref}
+      className={`group relative h-10 select-none truncate px-2 align-middle text-left text-muted-foreground ${
+        bold ? "font-semibold text-foreground" : "font-medium"
+      } ${align === "right" ? "text-right" : ""}`}
+      title={onRename ? `Duplo-clique para renomear (origem: ${origin})` : undefined}
+      onDoubleClick={onRename}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {onRename && (
+          <Pencil className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-50" />
+        )}
+      </span>
+      <span
+        onMouseDown={(e) => {
+          e.preventDefault();
+          startXRef.current = e.clientX;
+          startWRef.current = width;
+          setDragging(true);
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onResize(DEFAULT_COL_WIDTH);
+        }}
+        className="absolute right-0 top-0 z-10 h-full w-1.5 cursor-col-resize bg-transparent hover:bg-primary/30"
+        title="Arrastar para redimensionar · duplo-clique para padrão"
+      />
+    </th>
   );
 }
 
