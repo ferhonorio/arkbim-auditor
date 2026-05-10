@@ -35,7 +35,11 @@ function SharePage() {
     let alive = true;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.rpc("get_share_payload", { _token: token });
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : null;
+      const { data, error } = await supabase.rpc("get_share_payload", {
+        _token: token,
+        _user_agent: ua,
+      });
       if (!alive) return;
       if (error) {
         setError("Não foi possível carregar este link agora.");

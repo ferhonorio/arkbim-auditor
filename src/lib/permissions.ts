@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export type AppRole = "master" | "coordenador" | "comentador" | "admin" | "user" | null;
-export type ProfileStatus = "pending" | "approved" | "rejected";
+/**
+ * Status de aprovação. `rejected` é mantido apenas como fallback para
+ * registros legados ainda não migrados — o valor canônico atual é `blocked`.
+ */
+export type ProfileStatus = "pending" | "approved" | "blocked" | "rejected";
 
 export interface Permissions {
   loading: boolean;
@@ -15,6 +19,7 @@ export interface Permissions {
   canComment: boolean;
   canDeleteCategory: boolean;
   isApproved: boolean;
+  isBlocked: boolean;
   refresh: () => Promise<void>;
 }
 
@@ -60,6 +65,7 @@ export function usePermissions(userId: string | null): Permissions {
   const canComment = canEdit || role === "comentador";
   const canDeleteCategory = isMaster;
   const isApproved = status === "approved";
+  const isBlocked = status === "blocked" || status === "rejected";
 
   return {
     loading,
@@ -72,6 +78,7 @@ export function usePermissions(userId: string | null): Permissions {
     canComment,
     canDeleteCategory,
     isApproved,
+    isBlocked,
     refresh: load,
   };
 }

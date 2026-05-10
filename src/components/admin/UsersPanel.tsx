@@ -32,15 +32,18 @@ import { toast } from "sonner";
 import { Check, X, RefreshCw, KeyRound, Copy } from "lucide-react";
 import { handleSupabaseError } from "@/lib/error-handling";
 import { useProjectName, setProjectName as saveProjectName } from "@/lib/project-settings";
+import { logActivity } from "@/lib/activity-log";
 
 type AssignableRole = "coordenador" | "comentador";
+
+type UserStatus = "pending" | "approved" | "blocked" | "rejected";
 
 interface UserRow {
   id: string;
   email: string | null;
   display_name: string | null;
   user_label: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: UserStatus;
   role: string | null;
   created_at: string;
 }
@@ -112,10 +115,13 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
     load();
   }, [load]);
 
-  const setStatus = async (id: string, status: UserRow["status"]) => {
+  const setStatus = async (id: string, status: UserStatus) => {
     const { error } = await supabase.from("profiles").update({ status }).eq("id", id);
     if (error) return handleSupabaseError(error, "save");
     toast.success("Status atualizado");
+    const action =
+      status === "approved" ? "user.approve" : status === "blocked" ? "user.block" : "user.reactivate";
+    void logActivity(action, "user", id, { status });
     load();
   };
 
@@ -124,6 +130,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
     const { error } = await supabase.from("user_roles").insert({ user_id: id, role });
     if (error) return handleSupabaseError(error, "save");
     toast.success("Permissão atualizada");
+    void logActivity("user.role_change", "user", id, { role });
     load();
   };
 
@@ -147,6 +154,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
         throw error ?? new Error("reset_failed");
       }
       setResetResult({ email: resetTarget.email ?? "", password: newPassword });
+      void logActivity("user.password_reset", "user", resetTarget.id, {});
       setResetTarget(null);
     } catch (e) {
       handleSupabaseError(e as { message?: string }, "save");
@@ -155,10 +163,10 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
     }
   };
 
-  const statusBadge = (s: UserRow["status"]) => {
+  const statusBadge = (s: UserStatus) => {
     if (s === "approved") return <Badge className="bg-emerald-600 hover:bg-emerald-600">Aprovado</Badge>;
     if (s === "pending") return <Badge variant="secondary">Pendente</Badge>;
-    return <Badge variant="destructive">Rejeitado</Badge>;
+    return <Badge variant="destructive">Bloqueado</Badge>;
   };
 
   return (
@@ -265,12 +273,12 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
                       <div className="flex justify-end gap-2">
                         {!isMaster && r.status !== "approved" && (
                           <Button size="sm" variant="outline" onClick={() => setStatus(r.id, "approved")}>
-                            <Check className="mr-1 h-3.5 w-3.5" /> Aprovar
+                            <Check className="mr-1 h-3.5 w-3.5" /> {r.status === "blocked" || r.status === "rejected" ? "Reativar" : "Aprovar"}
                           </Button>
                         )}
-                        {!isMaster && r.status !== "rejected" && (
-                          <Button size="sm" variant="outline" onClick={() => setStatus(r.id, "rejected")}>
-                            <X className="mr-1 h-3.5 w-3.5" /> Rejeitar
+                        {!isMaster && r.status !== "blocked" && r.status !== "rejected" && (
+                          <Button size="sm" variant="outline" onClick={() => setStatus(r.id, "blocked")}>
+                            <X className="mr-1 h-3.5 w-3.5" /> Bloquear
                           </Button>
                         )}
                         <Button

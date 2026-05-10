@@ -28,6 +28,8 @@ import {
 } from "@/lib/share-links";
 import { handleSupabaseError } from "@/lib/error-handling";
 import { useAuth } from "@/lib/auth";
+import { supabase } from "@/integrations/supabase/client";
+import { logActivity } from "@/lib/activity-log";
 
 interface Props {
   open: boolean;
@@ -48,6 +50,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
   const { user } = useAuth();
   const [validity, setValidity] = useState<string>("15");
   const [links, setLinks] = useState<ShareLinkRow[]>([]);
+  const [accessCounts, setAccessCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -56,6 +59,21 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     try {
       const rows = await listShareLinks(scope, listId);
       setLinks(rows);
+      if (rows.length > 0) {
+        const ids = rows.map((r) => r.id);
+        const { data: logs } = await supabase
+          .from("share_link_access_logs")
+          .select("link_id")
+          .in("link_id", ids);
+        const counts: Record<string, number> = {};
+        for (const l of logs ?? []) {
+          const k = (l as { link_id: string }).link_id;
+          counts[k] = (counts[k] ?? 0) + 1;
+        }
+        setAccessCounts(counts);
+      } else {
+        setAccessCounts({});
+      }
     } catch (e) {
       handleSupabaseError(e as { message?: string }, "load");
     } finally {
@@ -78,6 +96,11 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
         user.id,
       );
       const url = buildShareUrl(row.token);
+      void logActivity("share.create", "share_link", row.id, {
+        scope,
+        list_id: listId ?? null,
+        expires_in_days: days,
+      });
       try {
         await navigator.clipboard.writeText(url);
         toast.success("Link gerado e copiado");
@@ -105,6 +128,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     if (!window.confirm("Revogar este link? Quem o tiver não conseguirá mais acessar.")) return;
     try {
       await revokeShareLink(id);
+      void logActivity("share.revoke", "share_link", id, {});
       toast.success("Link revogado");
       reload();
     } catch (e) {
@@ -197,6 +221,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                         </Badge>
                       )}
                       <span>{fmtExpiry(l.expires_at)}</span>
+                      <span>· {accessCounts[l.id] ?? 0} acesso(s)</span>
                     </div>
                   </div>
                   <Button
