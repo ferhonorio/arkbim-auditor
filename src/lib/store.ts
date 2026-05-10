@@ -19,6 +19,8 @@ import {
   planConsolidation,
   migrateComponentList,
   applyFloorAliasesToItems,
+  removeFloorFromListData,
+  type RemoveFloorOutcome,
   DEFAULT_KEY_COLUMN,
   DEFAULT_FLOOR_COLUMN,
 } from "./component-lists";
@@ -126,6 +128,11 @@ interface ArkState {
   renameItemKey: (id: string, oldKey: string, newKey: string) => boolean;
   setFloorAlias: (id: string, raw: string, alias: string) => void;
   reapplyFloorAliases: (id: string) => void;
+  removeFloorFromList: (
+    id: string,
+    floorSource: string,
+    opts?: { dropKeys?: string[] },
+  ) => RemoveFloorOutcome | null;
   applyDatasetResolutions: (
     keyColumns: string[],
     resolutions: Array<{ keyValues: Record<string, string>; column: string; value: string }>,
@@ -415,7 +422,15 @@ export const useArk = create<ArkState>()(
                 if (i.key !== key) return i;
                 const params = { ...i.params, [column]: value };
                 const columns = i.columns.includes(column) ? i.columns : [...i.columns, column];
-                return { ...i, params, columns, lastUpdatedAt: Date.now() };
+                const editedParams = { ...(i.editedParams ?? {}), [column]: true as const };
+                return {
+                  ...i,
+                  params,
+                  columns,
+                  editedParams,
+                  manuallyEditedAt: Date.now(),
+                  lastUpdatedAt: Date.now(),
+                };
               }),
               updatedAt: Date.now(),
             };

@@ -8,15 +8,29 @@ export const KEY_COLUMN = DEFAULT_KEY_COLUMN;
 export type MeasureMode = "count" | "area";
 
 export interface FileOccurrence {
-  floor: string; // value of floorColumn
-  file: string; // source file (Nome do arquivo)
-  quantity: number; // count OR sum of area
+  /** Raw value coming from `floorColumn` — TECHNICAL IDENTITY of the floor.
+   *  Aliases/friendly names live in `list.floorAliases` and are applied for
+   *  display only. Never used as part of any de-dup key. */
+  floorSource: string;
+  /** @deprecated Mantido somente para leitura de dados antigos. Sempre derive
+   *  o display via `displayFloor(list, occ.floorSource)`. */
+  floor?: string;
+  file: string;
+  quantity: number;
   ids: string[];
 }
 
 export interface ConsolidatedItem {
   key: string;
   params: Record<string, string>;
+  /** Columns marked as edited manually by the user. Protected from overwrite
+   *  during reconsolidation (mode "overwrite") and never auto-filled in
+   *  "only-new". */
+  editedParams?: Record<string, true>;
+  /** Whether the key itself was renamed manually. */
+  editedKey?: true;
+  /** Timestamp of the last manual edit (audit). */
+  manuallyEditedAt?: number;
   columns: string[];
   occurrences: FileOccurrence[];
   totalQuantity: number;
@@ -43,14 +57,18 @@ export interface ComponentList {
   areaColumn?: string;
   columnAliases: Record<string, string>;
   columnWidths?: Record<string, number>;
-  /** Map raw floor value (typically file name) to a friendly floor label. */
+  /** Map RAW floor source value → friendly floor label (display only). */
   floorAliases?: Record<string, string>;
   items: ConsolidatedItem[];
   sourceFiles: string[];
   createdAt: number;
   updatedAt: number;
   lastSnapshot?: ConsolidationSnapshot;
+  /** Schema-version stamp. v1+ uses `floorSource` as canonical identity. */
+  schemaVersion?: number;
 }
+
+export const CURRENT_LIST_SCHEMA = 1;
 
 export type ConsolidationMode = "overwrite" | "only-new";
 
@@ -59,6 +77,9 @@ export interface ConflictReport {
   existing: Record<string, string>;
   incoming: Record<string, string>;
   differingCols: string[];
+  /** Subset of `differingCols` that will be PROTECTED (not overwritten) because
+   *  the user already edited them manually. */
+  protectedCols: string[];
 }
 
 export interface ConsolidatePlan {
@@ -75,13 +96,11 @@ export function parseLocaleNumber(raw: string | undefined | null): number {
   if (raw == null) return NaN;
   let s = String(raw).trim();
   if (!s) return NaN;
-  // Strip units like "m²", spaces
   s = s.replace(/[^\d,.\-+eE]/g, "");
   if (!s) return NaN;
   const hasComma = s.includes(",");
   const hasDot = s.includes(".");
   if (hasComma && hasDot) {
-    // Assume "1.234,56" → comma is decimal
     s = s.replace(/\./g, "").replace(",", ".");
   } else if (hasComma) {
     s = s.replace(",", ".");
@@ -107,6 +126,20 @@ const canonical = (rows: Row[], col: string): string => {
   }
   return best;
 };
+
+/** Friendly display name for a floor source, falling back to the raw value. */
+export function displayFloor(
+  list: Pick<ComponentList, "floorAliases">,
+  source: string,
+): string {
+  const a = list.floorAliases?.[source];
+  return (a && a.trim()) || source;
+}
+
+/** Read the floor identity from any occurrence shape (handles legacy `floor`). */
+export function getFloorSource(o: FileOccurrence): string {
+  return o.floorSource || o.floor || "";
+}
 
 export function planConsolidation(
   rows: Row[],
@@ -151,21 +184,23 @@ export function planConsolidation(
     const params: Record<string, string> = {};
     for (const c of paramCols) params[c] = canonical(grp, c);
 
-    // Group by floor + file to preserve provenance
-    const byFloorFile = new Map<string, { floor: string; file: string; rows: Row[] }>();
-    const aliases = list.floorAliases ?? {};
+    // Group by RAW floor source + file to preserve technical identity.
+    const byFloorFile = new Map<
+      string,
+      { floorSource: string; file: string; rows: Row[] }
+    >();
     for (const r of grp) {
-      const rawFloor = (r[floorCol] ?? "").trim() || "(sem pavimento)";
-      const floor = aliases[rawFloor] || rawFloor;
+      const floorSource = (r[floorCol] ?? "").trim() || "(sem pavimento)";
       const file = (r[fileCol] ?? "").trim() || "(sem arquivo)";
-      const k = `${floor}\u0001${file}`;
-      if (!byFloorFile.has(k)) byFloorFile.set(k, { floor, file, rows: [] });
+      const k = `${floorSource}\u0001${file}`;
+      if (!byFloorFile.has(k))
+        byFloorFile.set(k, { floorSource, file, rows: [] });
       byFloorFile.get(k)!.rows.push(r);
       if (!knownFiles.has(file)) newFiles.add(file);
     }
 
-    const occurrences: FileOccurrence[] = Array.from(byFloorFile.values()).map(
-      ({ floor, file, rows: rs }) => {
+    const occurrences: FileOccurrence[] = Array.from(byFloorFile.values())
+      .map(({ floorSource, file, rows: rs }) => {
         let quantity: number;
         if (list.measureMode === "area" && list.areaColumn) {
           let sum = 0;
@@ -179,22 +214,26 @@ export function planConsolidation(
           quantity = rs.length;
         }
         return {
-          floor,
+          floorSource,
           file,
           quantity,
           ids: rs.map((r) => r[list.idCol]).filter(Boolean),
         };
-      },
-    ).sort((a, b) =>
-      a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
-    );
+      })
+      .sort(
+        (a, b) =>
+          a.floorSource.localeCompare(b.floorSource) ||
+          a.file.localeCompare(b.file),
+      );
 
     const item: ConsolidatedItem = {
       key,
       params,
       columns: paramCols,
       occurrences,
-      totalQuantity: Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
+      totalQuantity:
+        Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) /
+        1000,
       firstSeenAt: now,
       lastUpdatedAt: now,
     };
@@ -205,10 +244,14 @@ export function planConsolidation(
       newItems.push(item);
     } else {
       const differing: string[] = [];
+      const protectedCols: string[] = [];
       for (const c of paramCols) {
         const v = item.params[c] ?? "";
         const old = prev.params[c] ?? "";
-        if (v && old && v !== old) differing.push(c);
+        if (v && old && v !== old) {
+          differing.push(c);
+          if (prev.editedParams?.[c]) protectedCols.push(c);
+        }
       }
       if (differing.length) {
         conflicts.push({
@@ -216,6 +259,7 @@ export function planConsolidation(
           existing: prev.params,
           incoming: item.params,
           differingCols: differing,
+          protectedCols,
         });
       } else {
         unchanged.push(item);
@@ -224,7 +268,10 @@ export function planConsolidation(
   }
 
   preview.sort((a, b) =>
-    a.key.localeCompare(b.key, undefined, { numeric: true, sensitivity: "base" }),
+    a.key.localeCompare(b.key, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
   );
 
   return {
@@ -243,6 +290,7 @@ export interface CommitOutcome {
   added: number;
   updated: number;
   skipped: number;
+  protectedCount: number;
   newFiles: string[];
 }
 
@@ -256,19 +304,29 @@ export function commitConsolidation(
   let added = 0;
   let updated = 0;
   let skipped = 0;
+  let protectedCount = 0;
 
-  const occKey = (o: FileOccurrence) => `${o.floor}\u0001${o.file}`;
+  const occKey = (o: FileOccurrence) => `${getFloorSource(o)}\u0001${o.file}`;
 
-  const mergeOccurrences = (prev: ConsolidatedItem, next: ConsolidatedItem) => {
+  /** Merge incoming occurrences into prev. Same (floorSource,file) pairs are
+   *  REPLACED by the incoming version (re-import is the authoritative recount).
+   *  This makes partial reconsolidation safe: never duplicates. */
+  const mergeOccurrences = (
+    prev: ConsolidatedItem,
+    next: ConsolidatedItem,
+  ) => {
     const byKey = new Map(prev.occurrences.map((o) => [occKey(o), o]));
     for (const o of next.occurrences) byKey.set(occKey(o), o);
     const occurrences = Array.from(byKey.values()).sort(
-      (a, b) => a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
+      (a, b) =>
+        getFloorSource(a).localeCompare(getFloorSource(b)) ||
+        a.file.localeCompare(b.file),
     );
     return {
       occurrences,
       totalQuantity:
-        Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
+        Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) /
+        1000,
     };
   };
 
@@ -284,8 +342,20 @@ export function commitConsolidation(
     }
     const occ = mergeOccurrences(prev, item);
     if (mode === "only-new") {
+      // Never touches params. Only fills params that were never set before AND
+      // not marked as manually edited.
+      const params = { ...prev.params };
+      const edited = prev.editedParams ?? {};
+      for (const c of item.columns) {
+        const v = item.params[c];
+        if (!v) continue;
+        if (edited[c]) continue;
+        if (params[c]) continue;
+        params[c] = v;
+      }
       map.set(item.key, {
         ...prev,
+        params,
         ...occ,
         columns: mergeColumns(prev.columns, item.columns),
         lastUpdatedAt: now,
@@ -293,9 +363,16 @@ export function commitConsolidation(
       skipped++;
     } else {
       const params = { ...prev.params };
+      const edited = prev.editedParams ?? {};
       for (const c of item.columns) {
         const v = item.params[c];
-        if (v) params[c] = v;
+        if (!v) continue;
+        if (edited[c] && params[c]) {
+          // Protected: keep manual edit. Count once per column.
+          protectedCount++;
+          continue;
+        }
+        params[c] = v;
       }
       map.set(item.key, {
         ...prev,
@@ -313,23 +390,168 @@ export function commitConsolidation(
     added,
     updated,
     skipped,
+    protectedCount,
     newFiles: plan.newFiles,
   };
 }
 
-/** Migration helper: ensure new fields exist on persisted lists. */
-export function migrateComponentList(l: Partial<ComponentList> & { id: string; name: string }): ComponentList {
+/** Check whether an item has any manual-edit / protection marker. */
+export function isItemProtected(i: ConsolidatedItem): boolean {
+  if (i.editedKey) return true;
+  if (i.manuallyEditedAt) return true;
+  if (i.editedParams && Object.keys(i.editedParams).length > 0) return true;
+  return false;
+}
+
+export interface RemoveFloorOutcome {
+  itemsAffected: number;
+  itemsRemoved: number;
+  itemsKeptZeroed: number;
+  quantityRemoved: number;
+  filesRemoved: string[];
+}
+
+/** Remove all occurrences whose floorSource matches `floorSource`. Items that
+ *  end up with no occurrences are removed ONLY if their key is in `dropKeys`
+ *  AND they have no protection markers. Returns a summary. */
+export function removeFloorFromListData(
+  list: ComponentList,
+  floorSource: string,
+  opts: { dropKeys?: Set<string> } = {},
+): { list: ComponentList; outcome: RemoveFloorOutcome } {
+  const dropKeys = opts.dropKeys ?? new Set<string>();
+  let itemsAffected = 0;
+  let itemsRemoved = 0;
+  let itemsKeptZeroed = 0;
+  let quantityRemoved = 0;
+
+  const next: ConsolidatedItem[] = [];
+  for (const i of list.items) {
+    const before = i.occurrences;
+    const after = before.filter((o) => getFloorSource(o) !== floorSource);
+    if (after.length === before.length) {
+      next.push(i);
+      continue;
+    }
+    itemsAffected++;
+    for (const o of before) {
+      if (getFloorSource(o) === floorSource) quantityRemoved += o.quantity;
+    }
+    if (after.length === 0) {
+      const protectedItem = isItemProtected(i);
+      if (!protectedItem && dropKeys.has(i.key)) {
+        itemsRemoved++;
+        continue;
+      }
+      itemsKeptZeroed++;
+      next.push({
+        ...i,
+        occurrences: [],
+        totalQuantity: 0,
+        lastUpdatedAt: Date.now(),
+      });
+    } else {
+      next.push({
+        ...i,
+        occurrences: after,
+        totalQuantity:
+          Math.round(after.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
+        lastUpdatedAt: Date.now(),
+      });
+    }
+  }
+
+  // Recompute sourceFiles based on what remains.
+  const stillUsed = new Set<string>();
+  for (const i of next) for (const o of i.occurrences) stillUsed.add(o.file);
+  const filesRemoved = list.sourceFiles.filter((f) => !stillUsed.has(f));
+  const sourceFiles = list.sourceFiles.filter((f) => stillUsed.has(f));
+
+  quantityRemoved = Math.round(quantityRemoved * 1000) / 1000;
+
+  return {
+    list: { ...list, items: next, sourceFiles, updatedAt: Date.now() },
+    outcome: {
+      itemsAffected,
+      itemsRemoved,
+      itemsKeptZeroed,
+      quantityRemoved,
+      filesRemoved,
+    },
+  };
+}
+
+/** Aggregate occurrences by `floorSource` for the Pavimentos panel. */
+export interface FloorAggregate {
+  floorSource: string;
+  display: string;
+  itemCount: number;
+  totalQuantity: number;
+}
+export function aggregateFloors(list: ComponentList): FloorAggregate[] {
+  const m = new Map<string, { count: number; qty: number }>();
+  for (const i of list.items) {
+    const seen = new Set<string>();
+    for (const o of i.occurrences) {
+      const src = getFloorSource(o);
+      if (!src) continue;
+      const cur = m.get(src) ?? { count: 0, qty: 0 };
+      cur.qty += o.quantity;
+      if (!seen.has(src)) {
+        cur.count += 1;
+        seen.add(src);
+      }
+      m.set(src, cur);
+    }
+  }
+  return Array.from(m, ([floorSource, v]) => ({
+    floorSource,
+    display: displayFloor(list, floorSource),
+    itemCount: v.count,
+    totalQuantity: Math.round(v.qty * 1000) / 1000,
+  })).sort((a, b) => a.display.localeCompare(b.display));
+}
+
+/** Migration helper: ensures new fields exist on persisted lists. Idempotent. */
+export function migrateComponentList(
+  l: Partial<ComponentList> & { id: string; name: string },
+): ComponentList {
   const fileColumn = l.fileColumn || DEFAULT_FLOOR_COLUMN;
-  const occMigrated = (l.items ?? []).map((i) => ({
-    ...i,
-    occurrences: (i.occurrences ?? []).map((o: FileOccurrence | { file: string; quantity: number; ids: string[] }) => ({
-      floor: ("floor" in o && o.floor) ? o.floor : (o as { file: string }).file,
-      file: o.file,
-      quantity: o.quantity,
-      ids: o.ids ?? [],
-    })),
-    columns: i.columns ?? [],
-  }));
+  const aliases = l.floorAliases ?? {};
+  // Reverse map: if a legacy `o.floor` matches an alias VALUE, recover the raw
+  // source key. Otherwise treat the legacy `o.floor` as already-source.
+  const aliasReverse = new Map<string, string>();
+  for (const [src, val] of Object.entries(aliases)) {
+    if (val && !aliasReverse.has(val)) aliasReverse.set(val, src);
+  }
+
+  const occMigrated = (l.items ?? []).map((i) => {
+    const occurrences = (i.occurrences ?? []).map((o) => {
+      const anyO = o as Partial<FileOccurrence> & { file?: string };
+      let floorSource = anyO.floorSource || "";
+      if (!floorSource) {
+        const legacyFloor = anyO.floor || "";
+        if (legacyFloor && aliasReverse.has(legacyFloor)) {
+          floorSource = aliasReverse.get(legacyFloor)!;
+        } else {
+          floorSource = legacyFloor || anyO.file || "";
+        }
+      }
+      return {
+        floorSource,
+        file: anyO.file ?? "",
+        quantity: anyO.quantity ?? 0,
+        ids: anyO.ids ?? [],
+      } satisfies FileOccurrence;
+    });
+    return {
+      ...i,
+      occurrences,
+      columns: i.columns ?? [],
+      editedParams: i.editedParams ?? {},
+    };
+  });
+
   return {
     id: l.id,
     name: l.name,
@@ -342,38 +564,53 @@ export function migrateComponentList(l: Partial<ComponentList> & { id: string; n
     areaColumn: l.areaColumn,
     columnAliases: l.columnAliases ?? {},
     columnWidths: l.columnWidths ?? {},
-    floorAliases: l.floorAliases ?? {},
+    floorAliases: aliases,
     items: occMigrated,
     sourceFiles: l.sourceFiles ?? [],
     createdAt: l.createdAt ?? Date.now(),
     updatedAt: l.updatedAt ?? Date.now(),
     lastSnapshot: l.lastSnapshot,
+    schemaVersion: CURRENT_LIST_SCHEMA,
   };
 }
 
-/** Re-apply floor aliases to a list's existing items.occurrences (merging entries that collapse). */
-export function applyFloorAliasesToItems(items: ConsolidatedItem[], aliases: Record<string, string>): ConsolidatedItem[] {
+/** No-op for new pipeline (aliases are display-only). Kept for compat with
+ *  callers that rely on a manual "apply now" button — returns items unchanged
+ *  except for re-collapsing same-source duplicates that may exist in legacy
+ *  data after migration. */
+export function applyFloorAliasesToItems(
+  items: ConsolidatedItem[],
+  _aliases: Record<string, string>,
+): ConsolidatedItem[] {
   return items.map((i) => {
     const map = new Map<string, FileOccurrence>();
     for (const o of i.occurrences) {
-      const floor = aliases[o.floor] || o.floor;
-      const k = `${floor}\u0001${o.file}`;
+      const src = getFloorSource(o);
+      const k = `${src}\u0001${o.file}`;
       const prev = map.get(k);
       if (prev) {
         prev.quantity = Math.round((prev.quantity + o.quantity) * 1000) / 1000;
         prev.ids = Array.from(new Set([...prev.ids, ...o.ids]));
       } else {
-        map.set(k, { floor, file: o.file, quantity: o.quantity, ids: [...o.ids] });
+        map.set(k, {
+          floorSource: src,
+          file: o.file,
+          quantity: o.quantity,
+          ids: [...o.ids],
+        });
       }
     }
     const occurrences = Array.from(map.values()).sort(
-      (a, b) => a.floor.localeCompare(b.floor) || a.file.localeCompare(b.file),
+      (a, b) =>
+        a.floorSource.localeCompare(b.floorSource) ||
+        a.file.localeCompare(b.file),
     );
     return {
       ...i,
       occurrences,
-      totalQuantity: Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000,
+      totalQuantity:
+        Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) /
+        1000,
     };
   });
 }
-

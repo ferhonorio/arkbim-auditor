@@ -11,7 +11,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import type { ComponentList } from "@/lib/component-lists";
+import {
+  type ComponentList,
+  displayFloor,
+  getFloorSource,
+} from "@/lib/component-lists";
 import { exportXLSXStyled, type SheetSpec } from "@/lib/export";
 
 interface CategoryFloorAggregate {
@@ -34,11 +38,13 @@ function fmtQty(l: ComponentList, n: number) {
 export function FloorView() {
   const lists = useArk((s) => s.componentLists);
 
+  // Floor identity = source. We list distinct sources across all lists, with
+  // a friendly display name resolved per-list (alias or fallback to source).
   const allFloors = useMemo(() => {
     const set = new Set<string>();
     for (const l of lists)
       for (const i of l.items)
-        for (const o of i.occurrences) set.add(o.floor);
+        for (const o of i.occurrences) set.add(getFloorSource(o));
     return Array.from(set).sort();
   }, [lists]);
 
@@ -51,7 +57,9 @@ export function FloorView() {
       .map((l) => {
         const items = l.items
           .map((i) => {
-            const occs = i.occurrences.filter((o) => o.floor === floor);
+            const occs = i.occurrences.filter(
+              (o) => getFloorSource(o) === floor,
+            );
             if (!occs.length) return null;
             const qty = occs.reduce((s, o) => s + o.quantity, 0);
             const files = occs.map((o) => ({ file: o.file, quantity: o.quantity }));
@@ -143,11 +151,19 @@ export function FloorView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {allFloors.map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {f}
-                  </SelectItem>
-                ))}
+                {allFloors.map((f) => {
+                  // Use the alias from the first list that knows about this
+                  // source — purely cosmetic.
+                  const friendly =
+                    lists
+                      .map((l) => l.floorAliases?.[f])
+                      .find((v) => v && v.trim()) || f;
+                  return (
+                    <SelectItem key={f} value={f}>
+                      {friendly}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>

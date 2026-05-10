@@ -45,7 +45,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
+import {
+  type ComponentList,
+  type ConsolidatedItem,
+  displayFloor,
+  getFloorSource,
+} from "@/lib/component-lists";
 import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
 import { PresentationView } from "@/components/ark/lists/PresentationView";
 import { ExportMenu } from "@/components/ark/lists/ExportMenu";
@@ -280,16 +285,21 @@ function CategoryView({
     return Array.from(set);
   }, [list.items]);
 
+  // Floor sources used by this list (for the floor filter dropdown).
   const allFloors = useMemo(() => {
     const set = new Set<string>();
-    for (const i of list.items) for (const o of i.occurrences) set.add(o.floor);
+    for (const i of list.items)
+      for (const o of i.occurrences) set.add(getFloorSource(o));
     return Array.from(set).sort();
   }, [list.items]);
 
   const filteredItems = useMemo(() => {
     const s = search.trim().toLowerCase();
     return list.items.filter((i) => {
-      if (floor !== "__all__" && !i.occurrences.some((o) => o.floor === floor)) {
+      if (
+        floor !== "__all__" &&
+        !i.occurrences.some((o) => getFloorSource(o) === floor)
+      ) {
         return false;
       }
       if (!s) return true;
@@ -449,7 +459,7 @@ function CategoryView({
             filteredItems={filteredItems}
             totalForItem={(i) => {
               if (floor === "__all__") return i.totalQuantity;
-              const occs = i.occurrences.filter((o) => o.floor === floor);
+              const occs = i.occurrences.filter((o) => getFloorSource(o) === floor);
               return Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
             }}
           />
@@ -763,8 +773,9 @@ function FloorBreakdown({
   const grouped = useMemo(() => {
     const m = new Map<string, { quantity: number; files: { file: string; quantity: number; ids: string[] }[] }>();
     for (const o of item.occurrences) {
-      if (!m.has(o.floor)) m.set(o.floor, { quantity: 0, files: [] });
-      const g = m.get(o.floor)!;
+      const src = getFloorSource(o);
+      if (!m.has(src)) m.set(src, { quantity: 0, files: [] });
+      const g = m.get(src)!;
       g.quantity += o.quantity;
       g.files.push({ file: o.file, quantity: o.quantity, ids: o.ids });
     }

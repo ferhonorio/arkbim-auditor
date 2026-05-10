@@ -78,7 +78,8 @@ function CategoryPresentation({ list }: { list: ComponentList }) {
 
   const allFloors = useMemo(() => {
     const set = new Set<string>();
-    for (const i of list.items) for (const o of i.occurrences) set.add(o.floor);
+    for (const i of list.items)
+      for (const o of i.occurrences) set.add(o.floorSource || o.floor || "");
     return Array.from(set).sort();
   }, [list.items]);
 
@@ -101,7 +102,9 @@ function CategoryPresentation({ list }: { list: ComponentList }) {
       if (floor === "__all__") {
         out.push({ item: i, total: i.totalQuantity });
       } else {
-        const occs = i.occurrences.filter((o) => o.floor === floor);
+        const occs = i.occurrences.filter(
+          (o) => (o.floorSource || o.floor || "") === floor,
+        );
         if (!occs.length) continue;
         const total =
           Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
