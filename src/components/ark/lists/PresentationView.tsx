@@ -102,7 +102,9 @@ function CategoryPresentation({ list }: { list: ComponentList }) {
       if (floor === "__all__") {
         out.push({ item: i, total: i.totalQuantity });
       } else {
-        const occs = i.occurrences.filter((o) => o.floor === floor);
+        const occs = i.occurrences.filter(
+          (o) => (o.floorSource || o.floor || "") === floor,
+        );
         if (!occs.length) continue;
         const total =
           Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;

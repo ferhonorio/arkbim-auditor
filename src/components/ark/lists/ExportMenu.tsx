@@ -173,16 +173,16 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
     if (!allLists.length) return toast.error("Sem categorias");
     const sheets: SheetSpec[] = [];
     const resumoRows = allLists.map((l) => {
-      const floors = new Set<string>();
+      const sources = new Set<string>();
       let total = 0;
       for (const i of l.items) {
-        for (const o of i.occurrences) floors.add(getFloorSource(o));
+        for (const o of i.occurrences) sources.add(getFloorSource(o));
         total += i.totalQuantity;
       }
       return {
         Categoria: l.name,
         Itens: l.items.length,
-        Pavimentos: floors.size,
+        Pavimentos: sources.size,
         Unidade: unitOf(l),
         Total: Math.round(total * 1000) / 1000,
       };
