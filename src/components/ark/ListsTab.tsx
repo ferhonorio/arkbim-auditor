@@ -239,6 +239,8 @@ function CategoryView({
   onUpdateParam,
   onRenameKey,
   onUndo,
+  onMoveItem,
+  otherLists,
 }: {
   list: ComponentList;
   allLists: ComponentList[];
@@ -254,6 +256,8 @@ function CategoryView({
   onUpdateParam: (key: string, col: string, val: string) => void;
   onRenameKey: (oldKey: string, newKey: string) => boolean;
   onUndo: () => void;
+  onMoveItem: (key: string, targetId: string, mode: "fail" | "merge") => boolean;
+  otherLists: ComponentList[];
 }) {
   const [search, setSearch] = useState("");
   const [floor, setFloor] = useState<string>("__all__");
