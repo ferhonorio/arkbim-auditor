@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_logs: {
+        Row: {
+          action: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          metadata: Json
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          metadata?: Json
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          metadata?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           id: string
@@ -167,6 +197,35 @@ export type Database = {
         }
         Relationships: []
       }
+      share_link_access_logs: {
+        Row: {
+          accessed_at: string
+          id: string
+          link_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          accessed_at?: string
+          id?: string
+          link_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          accessed_at?: string
+          id?: string
+          link_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_link_access_logs_link_id_fkey"
+            columns: ["link_id"]
+            isOneToOne: false
+            referencedRelation: "public_share_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -195,7 +254,9 @@ export type Database = {
     Functions: {
       can_comment: { Args: { _uid: string }; Returns: boolean }
       can_edit_lists: { Args: { _uid: string }; Returns: boolean }
-      get_share_payload: { Args: { _token: string }; Returns: Json }
+      get_share_payload:
+        | { Args: { _token: string }; Returns: Json }
+        | { Args: { _token: string; _user_agent?: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
