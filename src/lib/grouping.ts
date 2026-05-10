@@ -142,7 +142,13 @@ export interface VisualRule {
   // "any" (default): basta UM compareColumn divergir para o grupo ser inconsistente
   // "all": só é inconsistente se TODOS os compareColumns divergirem
   matchMode?: VisualRuleMatchMode;
+  // Quando true, valores vazios são ignorados na comparação (comportamento antigo).
+  // Por padrão (false), vazio conta como um valor distinto — vazio ≠ "P72".
+  ignoreEmpty?: boolean;
 }
+
+// Rótulo legível para valores vazios em diagnósticos/tooltips.
+export const EMPTY_VALUE_LABEL = "(vazio)";
 
 // Returns map of key -> { inconsistent: boolean; files: string[]; rows: Row[] }
 export interface RuleKeyEval {
