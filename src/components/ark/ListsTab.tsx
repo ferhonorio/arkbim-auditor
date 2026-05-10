@@ -13,6 +13,7 @@ import {
   Copy,
   Check,
   Share2,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
