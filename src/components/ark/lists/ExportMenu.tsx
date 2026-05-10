@@ -166,7 +166,7 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
       );
     }
     exportXLSXStyled(`${list.name} - por pavimento.xlsx`, sheets);
-    toast.success(`XLSX por pavimento (${floors.length} abas)`);
+    toast.success(`XLSX por pavimento (${sources.length} abas)`);
   };
 
   const exportAll = () => {

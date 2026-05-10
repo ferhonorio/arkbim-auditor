@@ -773,8 +773,9 @@ function FloorBreakdown({
   const grouped = useMemo(() => {
     const m = new Map<string, { quantity: number; files: { file: string; quantity: number; ids: string[] }[] }>();
     for (const o of item.occurrences) {
-      if (!m.has(o.floor)) m.set(o.floor, { quantity: 0, files: [] });
-      const g = m.get(o.floor)!;
+      const src = getFloorSource(o);
+      if (!m.has(src)) m.set(src, { quantity: 0, files: [] });
+      const g = m.get(src)!;
       g.quantity += o.quantity;
       g.files.push({ file: o.file, quantity: o.quantity, ids: o.ids });
     }
