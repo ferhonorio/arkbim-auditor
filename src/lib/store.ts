@@ -475,6 +475,18 @@ export const useArk = create<ArkState>()(
             return { ...l, items, updatedAt: Date.now() };
           }),
         })),
+      removeFloorFromList: (id, floorSource, opts) => {
+        let outcome: RemoveFloorOutcome | null = null;
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id !== id) return l;
+            const result = removeFloorFromListData(l, floorSource, opts);
+            outcome = result.outcome;
+            return { ...result.list, updatedAt: Date.now() };
+          }),
+        }));
+        return outcome;
+      },
       applyDatasetResolutions: (keyColumns, resolutions) => {
         const ds = get().dataset;
         if (!ds || !keyColumns.length || !resolutions.length) return 0;
