@@ -421,6 +421,15 @@ export function AnaliseTab() {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+                <label className="ml-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                  <Checkbox
+                    checked={r.ignoreEmpty === true}
+                    onCheckedChange={(v) =>
+                      updRule(r.id, { ignoreEmpty: v === true })
+                    }
+                  />
+                  Ignorar valores vazios na comparação
+                </label>
               </div>
 
               {/* Live mini-stats */}
