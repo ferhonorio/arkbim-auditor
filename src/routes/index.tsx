@@ -81,7 +81,7 @@ function Index() {
       <>
         <Toaster richColors position="top-right" />
         <PendingApproval
-          status={perms.status === "rejected" ? "rejected" : "pending"}
+          status={perms.isBlocked ? "blocked" : "pending"}
           email={user.email ?? ""}
           onSignOut={signOut}
         />
