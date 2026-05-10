@@ -128,8 +128,8 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
             {scope === "category" && listName ? ` — ${listName}` : " (todas as listas)"}
           </DialogTitle>
           <DialogDescription>
-            Gere um link público (somente leitura) no domínio <strong>edise.ld.arkbim.com</strong>.
-            Pessoas sem cadastro acessam direto pelo link.
+            Gere um link público (somente leitura). O link é gerado para o domínio atual
+            em que você está acessando o sistema. Pessoas sem cadastro acessam direto pelo link.
           </DialogDescription>
         </DialogHeader>
 
