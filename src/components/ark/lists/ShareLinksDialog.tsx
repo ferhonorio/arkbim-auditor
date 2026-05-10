@@ -221,6 +221,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                         </Badge>
                       )}
                       <span>{fmtExpiry(l.expires_at)}</span>
+                      <span>· {accessCounts[l.id] ?? 0} acesso(s)</span>
                     </div>
                   </div>
                   <Button
