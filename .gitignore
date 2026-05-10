@@ -30,3 +30,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local env (mantido fora do tracking; o Lovable injeta em runtime)
+.env
+.env.local
+.env.*.local
