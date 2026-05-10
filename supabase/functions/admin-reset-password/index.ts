@@ -31,15 +31,23 @@ Deno.serve(async (req) => {
 
     // Verify caller is master via service-role DB call
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { data: roleRow } = await admin
-      .from("user_roles")
-      .select("role, profiles!inner(status)")
-      .eq("user_id", callerId)
-      .eq("role", "master")
-      .eq("profiles.status", "approved")
-      .maybeSingle();
+    const [{ data: roleRow }, { data: profileRow }] = await Promise.all([
+      admin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", callerId)
+        .eq("role", "master")
+        .maybeSingle(),
+      admin
+        .from("profiles")
+        .select("status")
+        .eq("id", callerId)
+        .maybeSingle(),
+    ]);
 
-    if (!roleRow) return json({ error: "forbidden" }, 403);
+    if (!roleRow || profileRow?.status !== "approved") {
+      return json({ error: "forbidden" }, 403);
+    }
 
     const body = await req.json().catch(() => ({}));
     const targetUserId = String(body.user_id ?? body.userId ?? "");
