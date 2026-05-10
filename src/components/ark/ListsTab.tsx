@@ -89,6 +89,7 @@ export function ListsTab({
   const updateItemParam = useArk((s) => s.updateItemParam);
   const renameItemKey = useArk((s) => s.renameItemKey);
   const undoLast = useArk((s) => s.undoLastConsolidation);
+  const moveItem = useArk((s) => s.moveListItem);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
   const [presentation, setPresentation] = useState(false);
