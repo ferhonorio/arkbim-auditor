@@ -41,8 +41,8 @@ Deno.serve(async (req) => {
     if (!roleRow) return json({ error: "forbidden" }, 403);
 
     const body = await req.json().catch(() => ({}));
-    const targetUserId = String(body.userId ?? "");
-    const newPassword = String(body.password ?? "");
+    const targetUserId = String(body.user_id ?? body.userId ?? "");
+    const newPassword = String(body.new_password ?? body.password ?? "");
 
     if (!targetUserId || newPassword.length < 6) {
       return json({ error: "invalid_input" }, 400);
