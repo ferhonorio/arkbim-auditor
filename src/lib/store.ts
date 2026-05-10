@@ -115,6 +115,12 @@ interface ArkState {
   ) => { added: number; updated: number; skipped: number; newFiles: string[] } | null;
   undoLastConsolidation: (id: string) => boolean;
   removeListItem: (id: string, key: string) => void;
+  moveListItem: (
+    fromId: string,
+    toId: string,
+    key: string,
+    mode?: "fail" | "merge",
+  ) => { ok: boolean; reason?: "same-list" | "missing-source" | "missing-target" | "duplicate" };
   clearListItems: (id: string) => void;
   updateItemParam: (id: string, key: string, column: string, value: string) => void;
   renameItemKey: (id: string, oldKey: string, newKey: string) => boolean;
@@ -336,6 +342,61 @@ export const useArk = create<ArkState>()(
               : l,
           ),
         })),
+      moveListItem: (fromId, toId, key, mode = "fail") => {
+        if (fromId === toId) return { ok: false, reason: "same-list" };
+        const state = get();
+        const from = state.componentLists.find((l) => l.id === fromId);
+        const to = state.componentLists.find((l) => l.id === toId);
+        if (!from) return { ok: false, reason: "missing-source" };
+        if (!to) return { ok: false, reason: "missing-target" };
+        const item = from.items.find((i) => i.key === key);
+        if (!item) return { ok: false, reason: "missing-source" };
+        const existing = to.items.find((i) => i.key === key);
+        if (existing && mode === "fail") return { ok: false, reason: "duplicate" };
+
+        let mergedItem = item;
+        if (existing && mode === "merge") {
+          const occurrences = [...existing.occurrences, ...item.occurrences];
+          const totalQuantity =
+            Math.round(occurrences.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
+          const params = { ...item.params, ...existing.params };
+          const columns = Array.from(new Set([...existing.columns, ...item.columns]));
+          mergedItem = {
+            ...existing,
+            occurrences,
+            totalQuantity,
+            params,
+            columns,
+            lastUpdatedAt: Date.now(),
+          };
+        }
+
+        const now = Date.now();
+        const extraFiles = Array.from(
+          new Set(item.occurrences.map((o) => o.file).filter((f) => !to.sourceFiles.includes(f))),
+        );
+
+        set((s) => ({
+          componentLists: s.componentLists.map((l) => {
+            if (l.id === fromId) {
+              return { ...l, items: l.items.filter((i) => i.key !== key), updatedAt: now };
+            }
+            if (l.id === toId) {
+              const items = existing
+                ? l.items.map((i) => (i.key === key ? mergedItem : i))
+                : [...l.items, mergedItem];
+              return {
+                ...l,
+                items,
+                sourceFiles: [...l.sourceFiles, ...extraFiles],
+                updatedAt: now,
+              };
+            }
+            return l;
+          }),
+        }));
+        return { ok: true };
+      },
       clearListItems: (id) =>
         set((s) => ({
           componentLists: s.componentLists.map((l) =>

@@ -13,6 +13,7 @@ import {
   Copy,
   Check,
   Share2,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useArk } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
 import { FloorMappingPanel } from "@/components/ark/lists/FloorMappingPanel";
@@ -80,6 +89,7 @@ export function ListsTab({
   const updateItemParam = useArk((s) => s.updateItemParam);
   const renameItemKey = useArk((s) => s.renameItemKey);
   const undoLast = useArk((s) => s.undoLastConsolidation);
+  const moveItem = useArk((s) => s.moveListItem);
 
   const active = lists.find((l) => l.id === activeId) ?? lists[0] ?? null;
   const [presentation, setPresentation] = useState(false);
@@ -190,6 +200,23 @@ export function ListsTab({
               if (ok) toast.success("Última consolidação desfeita");
               else toast.error("Nada para desfazer");
             }}
+            onMoveItem={(key, targetId, mode) => {
+              const target = lists.find((l) => l.id === targetId);
+              const res = moveItem(active.id, targetId, key, mode);
+              if (res.ok) {
+                toast.success(`"${key}" movido para "${target?.name ?? "outra categoria"}"`);
+                return true;
+              }
+              if (res.reason === "duplicate") {
+                toast.error(`"${key}" já existe em "${target?.name}". Use mesclar.`);
+              } else if (res.reason === "same-list") {
+                toast.error("Categoria de destino igual à de origem");
+              } else {
+                toast.error("Não foi possível mover");
+              }
+              return false;
+            }}
+            otherLists={lists.filter((l) => l.id !== active.id)}
           />
         )}
       </main>
@@ -212,6 +239,8 @@ function CategoryView({
   onUpdateParam,
   onRenameKey,
   onUndo,
+  onMoveItem,
+  otherLists,
 }: {
   list: ComponentList;
   allLists: ComponentList[];
@@ -227,6 +256,8 @@ function CategoryView({
   onUpdateParam: (key: string, col: string, val: string) => void;
   onRenameKey: (oldKey: string, newKey: string) => boolean;
   onUndo: () => void;
+  onMoveItem: (key: string, targetId: string, mode: "fail" | "merge") => boolean;
+  otherLists: ComponentList[];
 }) {
   const [search, setSearch] = useState("");
   const [floor, setFloor] = useState<string>("__all__");
@@ -592,6 +623,56 @@ function CategoryView({
                               />
                             );
                           })()}
+                          {!readOnly && otherLists.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  title="Mover para outra categoria"
+                                >
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-64">
+                                <DropdownMenuLabel className="text-xs">
+                                  Mover "{i.key}" para…
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {otherLists.map((dst) => {
+                                  const conflict = dst.items.some((it) => it.key === i.key);
+                                  return (
+                                    <DropdownMenuItem
+                                      key={dst.id}
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        if (conflict) {
+                                          if (
+                                            window.confirm(
+                                              `"${i.key}" já existe em "${dst.name}". Mesclar ocorrências?`,
+                                            )
+                                          ) {
+                                            onMoveItem(i.key, dst.id, "merge");
+                                          }
+                                        } else {
+                                          onMoveItem(i.key, dst.id, "fail");
+                                        }
+                                      }}
+                                      className="flex items-center justify-between gap-2"
+                                    >
+                                      <span className="truncate">{dst.name}</span>
+                                      {conflict && (
+                                        <Badge variant="outline" className="text-[9px]">
+                                          mesclar
+                                        </Badge>
+                                      )}
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                           {!readOnly && (
                             <Button
                               size="icon"
