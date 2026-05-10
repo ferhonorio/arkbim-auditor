@@ -123,7 +123,7 @@ export function FloorMappingPanel({ list }: Props) {
 
   const doRemove = () => {
     if (!confirm) return;
-    const dropKeys = dropEmpty ? confirm.candidatesToDrop : [];
+    const dropKeys = new Set<string>(dropEmpty ? confirm.candidatesToDrop : []);
     const out = removeFloor(list.id, confirm.source, { dropKeys });
     if (!out) {
       toast.error("Falha ao remover pavimento");
