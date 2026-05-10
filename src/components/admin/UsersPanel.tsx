@@ -154,6 +154,7 @@ export function UsersPanel({ currentUserId }: { currentUserId: string }) {
         throw error ?? new Error("reset_failed");
       }
       setResetResult({ email: resetTarget.email ?? "", password: newPassword });
+      void logActivity("user.password_reset", "user", resetTarget.id, {});
       setResetTarget(null);
     } catch (e) {
       handleSupabaseError(e as { message?: string }, "save");
