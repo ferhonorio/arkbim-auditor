@@ -200,6 +200,23 @@ export function ListsTab({
               if (ok) toast.success("Última consolidação desfeita");
               else toast.error("Nada para desfazer");
             }}
+            onMoveItem={(key, targetId, mode) => {
+              const target = lists.find((l) => l.id === targetId);
+              const res = moveItem(active.id, targetId, key, mode);
+              if (res.ok) {
+                toast.success(`"${key}" movido para "${target?.name ?? "outra categoria"}"`);
+                return true;
+              }
+              if (res.reason === "duplicate") {
+                toast.error(`"${key}" já existe em "${target?.name}". Use mesclar.`);
+              } else if (res.reason === "same-list") {
+                toast.error("Categoria de destino igual à de origem");
+              } else {
+                toast.error("Não foi possível mover");
+              }
+              return false;
+            }}
+            otherLists={lists.filter((l) => l.id !== active.id)}
           />
         )}
       </main>
