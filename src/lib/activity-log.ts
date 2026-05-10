@@ -34,7 +34,7 @@ export async function logActivity(
       action,
       entity_type: entityType,
       entity_id: entityId,
-      metadata: sanitize(metadata),
+      metadata: sanitize(metadata) as never,
     });
   } catch {
     // logging nunca pode interromper o fluxo
