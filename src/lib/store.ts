@@ -115,6 +115,12 @@ interface ArkState {
   ) => { added: number; updated: number; skipped: number; newFiles: string[] } | null;
   undoLastConsolidation: (id: string) => boolean;
   removeListItem: (id: string, key: string) => void;
+  moveListItem: (
+    fromId: string,
+    toId: string,
+    key: string,
+    mode?: "fail" | "merge",
+  ) => { ok: boolean; reason?: "same-list" | "missing-source" | "missing-target" | "duplicate" };
   clearListItems: (id: string) => void;
   updateItemParam: (id: string, key: string, column: string, value: string) => void;
   renameItemKey: (id: string, oldKey: string, newKey: string) => boolean;
