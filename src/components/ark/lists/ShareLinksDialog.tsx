@@ -96,6 +96,11 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
         user.id,
       );
       const url = buildShareUrl(row.token);
+      void logActivity("share.create", "share_link", row.id, {
+        scope,
+        list_id: listId ?? null,
+        expires_in_days: days,
+      });
       try {
         await navigator.clipboard.writeText(url);
         toast.success("Link gerado e copiado");
@@ -123,6 +128,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     if (!window.confirm("Revogar este link? Quem o tiver não conseguirá mais acessar.")) return;
     try {
       await revokeShareLink(id);
+      void logActivity("share.revoke", "share_link", id, {});
       toast.success("Link revogado");
       reload();
     } catch (e) {
