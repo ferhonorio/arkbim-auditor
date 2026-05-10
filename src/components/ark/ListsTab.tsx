@@ -623,6 +623,56 @@ function CategoryView({
                               />
                             );
                           })()}
+                          {!readOnly && otherLists.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  title="Mover para outra categoria"
+                                >
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-64">
+                                <DropdownMenuLabel className="text-xs">
+                                  Mover "{i.key}" para…
+                                </DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {otherLists.map((dst) => {
+                                  const conflict = dst.items.some((it) => it.key === i.key);
+                                  return (
+                                    <DropdownMenuItem
+                                      key={dst.id}
+                                      onSelect={(e) => {
+                                        e.preventDefault();
+                                        if (conflict) {
+                                          if (
+                                            window.confirm(
+                                              `"${i.key}" já existe em "${dst.name}". Mesclar ocorrências?`,
+                                            )
+                                          ) {
+                                            onMoveItem(i.key, dst.id, "merge");
+                                          }
+                                        } else {
+                                          onMoveItem(i.key, dst.id, "fail");
+                                        }
+                                      }}
+                                      className="flex items-center justify-between gap-2"
+                                    >
+                                      <span className="truncate">{dst.name}</span>
+                                      {conflict && (
+                                        <Badge variant="outline" className="text-[9px]">
+                                          mesclar
+                                        </Badge>
+                                      )}
+                                    </DropdownMenuItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                           {!readOnly && (
                             <Button
                               size="icon"
