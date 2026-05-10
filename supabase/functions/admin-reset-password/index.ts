@@ -33,9 +33,10 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data: roleRow } = await admin
       .from("user_roles")
-      .select("role")
+      .select("role, profiles!inner(status)")
       .eq("user_id", callerId)
       .eq("role", "master")
+      .eq("profiles.status", "approved")
       .maybeSingle();
 
     if (!roleRow) return json({ error: "forbidden" }, 403);
