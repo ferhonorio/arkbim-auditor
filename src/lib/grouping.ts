@@ -142,7 +142,13 @@ export interface VisualRule {
   // "any" (default): basta UM compareColumn divergir para o grupo ser inconsistente
   // "all": só é inconsistente se TODOS os compareColumns divergirem
   matchMode?: VisualRuleMatchMode;
+  // Quando true, valores vazios são ignorados na comparação (comportamento antigo).
+  // Por padrão (false), vazio conta como um valor distinto — vazio ≠ "P72".
+  ignoreEmpty?: boolean;
 }
+
+// Rótulo legível para valores vazios em diagnósticos/tooltips.
+export const EMPTY_VALUE_LABEL = "(vazio)";
 
 // Returns map of key -> { inconsistent: boolean; files: string[]; rows: Row[] }
 export interface RuleKeyEval {
@@ -176,15 +182,17 @@ export function evaluateRule(
     // Só faz sentido comparar quando há mais de uma linha compartilhando a chave.
     const comparable = grp.length > 1;
     if (comparable) {
+      const ignoreEmpty = rule.ignoreEmpty === true;
       for (const c of cmpCols) {
         const set = new Set<string>();
         for (const r of grp) {
           const v = (r[c] ?? "").trim();
-          if (v) set.add(v);
+          if (!v && ignoreEmpty) continue;
+          set.add(v);
         }
         if (set.size > 1) {
           divergentCount++;
-          diffByColumn[c] = Array.from(set);
+          diffByColumn[c] = Array.from(set).map((v) => (v === "" ? EMPTY_VALUE_LABEL : v));
         }
       }
     }
@@ -286,17 +294,19 @@ export function evaluateRuleOnGroups(
       }
     }
     if (comparable) {
+      const ignoreEmpty = rule.ignoreEmpty === true;
       for (const c of cmpCols) {
         const set = new Set<string>();
         for (const g of gs) {
           for (const r of g.rawRows) {
             const v = (r[c] ?? "").trim();
-            if (v) set.add(v);
+            if (!v && ignoreEmpty) continue;
+            set.add(v);
           }
         }
         if (set.size > 1) {
           divergentCount++;
-          diffByColumn[c] = Array.from(set);
+          diffByColumn[c] = Array.from(set).map((v) => (v === "" ? EMPTY_VALUE_LABEL : v));
         }
       }
     }
