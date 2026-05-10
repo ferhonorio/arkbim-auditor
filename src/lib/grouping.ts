@@ -294,17 +294,19 @@ export function evaluateRuleOnGroups(
       }
     }
     if (comparable) {
+      const ignoreEmpty = rule.ignoreEmpty === true;
       for (const c of cmpCols) {
         const set = new Set<string>();
         for (const g of gs) {
           for (const r of g.rawRows) {
             const v = (r[c] ?? "").trim();
-            if (v) set.add(v);
+            if (!v && ignoreEmpty) continue;
+            set.add(v);
           }
         }
         if (set.size > 1) {
           divergentCount++;
-          diffByColumn[c] = Array.from(set);
+          diffByColumn[c] = Array.from(set).map((v) => (v === "" ? EMPTY_VALUE_LABEL : v));
         }
       }
     }
