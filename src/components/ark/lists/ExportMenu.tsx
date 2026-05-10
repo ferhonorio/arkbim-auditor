@@ -10,7 +10,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { exportXLSXStyled, exportCSV, type SheetSpec } from "@/lib/export";
-import type { ComponentList, ConsolidatedItem } from "@/lib/component-lists";
+import {
+  type ComponentList,
+  type ConsolidatedItem,
+  displayFloor,
+  getFloorSource,
+} from "@/lib/component-lists";
 
 interface Props {
   /** Currently active list (used by single-category exports). */
@@ -55,11 +60,13 @@ function rowsForItems(
     r[`Total (${unit})`] = totalFn(i);
     const byFloor = new Map<string, number>();
     for (const o of i.occurrences) {
-      byFloor.set(o.floor, (byFloor.get(o.floor) ?? 0) + o.quantity);
+      const src = getFloorSource(o);
+      byFloor.set(src, (byFloor.get(src) ?? 0) + o.quantity);
     }
-    r["Pavimentos"] = Array.from(byFloor, ([f, q]) => `${f} (${fmtQty(l, q)})`).join(
-      " · ",
-    );
+    r["Pavimentos"] = Array.from(
+      byFloor,
+      ([src, q]) => `${displayFloor(l, src)} (${fmtQty(l, q)})`,
+    ).join(" · ");
     return r;
   });
 }
@@ -101,15 +108,20 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
 
   const exportByFloor = () => {
     if (!filteredItems.length) return toast.error("Nada para exportar");
-    const floors = Array.from(
-      new Set(filteredItems.flatMap((i) => i.occurrences.map((o) => o.floor))),
+    const sources = Array.from(
+      new Set(
+        filteredItems.flatMap((i) =>
+          i.occurrences.map((o) => getFloorSource(o)),
+        ),
+      ),
     ).sort();
-    if (!floors.length) return toast.error("Sem pavimentos");
+    if (!sources.length) return toast.error("Sem pavimentos");
 
-    // Resumo (matriz Item × Pavimento)
+    // Resumo (matriz Item × Pavimento) — display headers use friendly names.
+    const floorHeaders = sources.map((s) => displayFloor(list, s));
     const resumoCols = [
       headerLabel(list, list.keyColumn),
-      ...floors,
+      ...floorHeaders,
       `Total (${unitOf(list)})`,
     ];
     const resumoRows = filteredItems.map((i) => {
@@ -117,13 +129,13 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
         [headerLabel(list, list.keyColumn)]: i.key,
       };
       let sum = 0;
-      for (const f of floors) {
+      sources.forEach((src, idx) => {
         const q = i.occurrences
-          .filter((o) => o.floor === f)
+          .filter((o) => getFloorSource(o) === src)
           .reduce((s, o) => s + o.quantity, 0);
-        r[f] = q ? Math.round(q * 1000) / 1000 : "";
+        r[floorHeaders[idx]] = q ? Math.round(q * 1000) / 1000 : "";
         sum += q;
-      }
+      });
       r[`Total (${unitOf(list)})`] = Math.round(sum * 1000) / 1000;
       return r;
     });
@@ -131,10 +143,12 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
     const sheets: SheetSpec[] = [
       { name: "Resumo", rows: resumoRows, columns: resumoCols },
     ];
-    for (const f of floors) {
+    for (const src of sources) {
       const items = filteredItems
         .map((i) => {
-          const occs = i.occurrences.filter((o) => o.floor === f);
+          const occs = i.occurrences.filter(
+            (o) => getFloorSource(o) === src,
+          );
           if (!occs.length) return null;
           return { ...i, occurrences: occs };
         })
@@ -147,7 +161,7 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
             Math.round(
               i.occurrences.reduce((s, o) => s + o.quantity, 0) * 1000,
             ) / 1000,
-          f,
+          displayFloor(list, src),
         ),
       );
     }
@@ -162,7 +176,7 @@ export function ExportMenu({ list, allLists, filteredItems, totalForItem }: Prop
       const floors = new Set<string>();
       let total = 0;
       for (const i of l.items) {
-        for (const o of i.occurrences) floors.add(o.floor);
+        for (const o of i.occurrences) floors.add(getFloorSource(o));
         total += i.totalQuantity;
       }
       return {

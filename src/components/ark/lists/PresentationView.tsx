@@ -78,7 +78,8 @@ function CategoryPresentation({ list }: { list: ComponentList }) {
 
   const allFloors = useMemo(() => {
     const set = new Set<string>();
-    for (const i of list.items) for (const o of i.occurrences) set.add(o.floor);
+    for (const i of list.items)
+      for (const o of i.occurrences) set.add(o.floorSource || o.floor || "");
     return Array.from(set).sort();
   }, [list.items]);
 
