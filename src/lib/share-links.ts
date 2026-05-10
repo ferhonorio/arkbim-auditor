@@ -66,19 +66,25 @@ export async function revokeShareLink(id: string) {
 }
 
 /**
- * Public share base URL. Defaults to the current origin so links always
- * resolve to a deployment that actually serves the /share/$token route.
- * Override via VITE_PUBLIC_SHARE_BASE_URL when a specific custom domain
- * is preferred.
+ * Public share base URL. Always points to the published custom domain
+ * (edise.ld.arkbim.com) which is public and does not require login.
+ * Preview/lovable.app domains require Lovable auth, so we never use them
+ * for shared links — even when the editor is using the preview.
+ * Override via VITE_PUBLIC_SHARE_BASE_URL if needed.
  */
+const PUBLIC_SHARE_DOMAIN = "https://edise.ld.arkbim.com";
+
 function getShareBaseUrl(): string {
   const envBase = (import.meta.env.VITE_PUBLIC_SHARE_BASE_URL as string | undefined)
     ?.replace(/\/$/, "");
   if (envBase) return envBase;
-  if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
+  // If user is already on the public custom domain, use it. Otherwise
+  // (preview, lovable.app, localhost), force the public custom domain.
+  if (typeof window !== "undefined" && window.location?.hostname) {
+    const host = window.location.hostname;
+    if (host === "edise.ld.arkbim.com") return window.location.origin;
   }
-  return "";
+  return PUBLIC_SHARE_DOMAIN;
 }
 
 export function buildShareUrl(token: string) {
