@@ -66,21 +66,29 @@ export async function revokeShareLink(id: string) {
 }
 
 /**
- * Public share base URL. Always points to the user-facing custom domain
- * so links shared with clients don't expose preview/Lovable URLs that may
- * require authentication. Override via VITE_PUBLIC_SHARE_BASE_URL.
+ * Public share base URL. Defaults to the current origin so links always
+ * resolve to a deployment that actually serves the /share/$token route.
+ * Override via VITE_PUBLIC_SHARE_BASE_URL when a specific custom domain
+ * is preferred.
  */
-const SHARE_BASE_URL =
-  (import.meta.env.VITE_PUBLIC_SHARE_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
-  "https://edise.ld.arkbim.com";
+function getShareBaseUrl(): string {
+  const envBase = (import.meta.env.VITE_PUBLIC_SHARE_BASE_URL as string | undefined)
+    ?.replace(/\/$/, "");
+  if (envBase) return envBase;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return "";
+}
 
 export function buildShareUrl(token: string) {
-  return `${SHARE_BASE_URL}/share/${token}`;
+  return `${getShareBaseUrl()}/share/${token}`;
 }
 
 /** Friendly display version of the link (host + truncated token). */
 export function formatShareUrlDisplay(token: string) {
-  const host = SHARE_BASE_URL.replace(/^https?:\/\//, "");
+  const base = getShareBaseUrl();
+  const host = base.replace(/^https?:\/\//, "");
   const short = token.length > 12 ? `${token.slice(0, 6)}…${token.slice(-4)}` : token;
   return `${host}/share/${short}`;
 }
