@@ -131,7 +131,7 @@ interface ArkState {
   removeFloorFromList: (
     id: string,
     floorSource: string,
-    opts?: { dropKeys?: string[] },
+    opts?: { dropKeys?: Set<string> },
   ) => RemoveFloorOutcome | null;
   applyDatasetResolutions: (
     keyColumns: string[],
