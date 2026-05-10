@@ -459,7 +459,7 @@ function CategoryView({
             filteredItems={filteredItems}
             totalForItem={(i) => {
               if (floor === "__all__") return i.totalQuantity;
-              const occs = i.occurrences.filter((o) => o.floor === floor);
+              const occs = i.occurrences.filter((o) => getFloorSource(o) === floor);
               return Math.round(occs.reduce((s, o) => s + o.quantity, 0) * 1000) / 1000;
             }}
           />
