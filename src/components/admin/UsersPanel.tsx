@@ -35,12 +35,14 @@ import { useProjectName, setProjectName as saveProjectName } from "@/lib/project
 
 type AssignableRole = "coordenador" | "comentador";
 
+type UserStatus = "pending" | "approved" | "blocked" | "rejected";
+
 interface UserRow {
   id: string;
   email: string | null;
   display_name: string | null;
   user_label: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: UserStatus;
   role: string | null;
   created_at: string;
 }
