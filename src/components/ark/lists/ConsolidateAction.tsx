@@ -391,7 +391,7 @@ export function ConsolidateAction({
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">Nome (ex.: Portas, Mobiliário)</Label>
+              <Label className="text-xs">Nome (ex.: LI_00_MOBILIARIO)</Label>
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
