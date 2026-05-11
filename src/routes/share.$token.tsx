@@ -103,7 +103,13 @@ function SharePage() {
         </div>
       </header>
       <main className="p-6">
-        <PresentationView lists={lists} onClose={() => { /* sem ação */ }} />
+        <PresentationView
+          lists={lists}
+          onClose={() => { /* sem ação */ }}
+          title="Lista consolidada"
+          subtitle={null}
+          showClose={false}
+        />
       </main>
     </div>
   );
