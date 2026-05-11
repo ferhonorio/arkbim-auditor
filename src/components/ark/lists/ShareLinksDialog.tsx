@@ -182,28 +182,42 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/30 p-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium">Validade</label>
-            <Select value={validity} onValueChange={setValidity}>
-              <SelectTrigger className="h-8 w-44 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {VALIDITY_OPTIONS.map((o) => (
-                  <SelectItem
-                    key={o.label}
-                    value={o.days === null ? "null" : String(o.days)}
-                  >
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium">Validade</label>
+              <Select value={validity} onValueChange={setValidity}>
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VALIDITY_OPTIONS.map((o) => (
+                    <SelectItem
+                      key={o.label}
+                      value={o.days === null ? "null" : String(o.days)}
+                    >
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium">
+                Nota (para quem é este link?)
+              </label>
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value.slice(0, 120))}
+                placeholder="Ex.: Cliente João, obra Edise PB"
+                className="h-8 text-xs"
+                maxLength={120}
+              />
+            </div>
+            <Button size="sm" onClick={handleCreate} disabled={creating}>
+              {creating ? "Gerando…" : "Gerar novo link"}
+            </Button>
           </div>
-          <Button size="sm" onClick={handleCreate} disabled={creating}>
-            {creating ? "Gerando…" : "Gerar novo link"}
-          </Button>
         </div>
 
         <div className="space-y-2">
