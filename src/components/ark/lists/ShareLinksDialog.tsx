@@ -299,6 +299,14 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                   <Button
                     size="icon"
                     variant="ghost"
+                    onClick={() => startEditNote(l)}
+                    title={l.note ? "Editar nota" : "Adicionar nota"}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
                     onClick={() => handleCopy(l.token)}
                     title="Copiar"
                   >
