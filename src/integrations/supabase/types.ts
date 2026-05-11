@@ -172,6 +172,7 @@ export type Database = {
           id: string
           is_active: boolean
           list_id: string | null
+          note: string | null
           scope: string
           token: string
         }
@@ -182,6 +183,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           list_id?: string | null
+          note?: string | null
           scope?: string
           token: string
         }
@@ -192,6 +194,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           list_id?: string | null
+          note?: string | null
           scope?: string
           token?: string
         }
