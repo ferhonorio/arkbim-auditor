@@ -24,11 +24,14 @@ import {
   formatShareUrlDisplay,
   listShareLinks,
   revokeShareLink,
+  updateShareLinkNote,
   type ShareLinkRow,
 } from "@/lib/share-links";
 import { handleSupabaseError } from "@/lib/error-handling";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Pencil, Check } from "lucide-react";
 import { logActivity } from "@/lib/activity-log";
 
 interface Props {
@@ -49,10 +52,13 @@ const VALIDITY_OPTIONS: { label: string; days: number | null }[] = [
 export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }: Props) {
   const { user } = useAuth();
   const [validity, setValidity] = useState<string>("15");
+  const [note, setNote] = useState<string>("");
   const [links, setLinks] = useState<ShareLinkRow[]>([]);
   const [accessCounts, setAccessCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteValue, setEditingNoteValue] = useState<string>("");
 
   const reload = async () => {
     setLoading(true);
@@ -92,7 +98,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     try {
       const days = validity === "null" ? null : Number(validity);
       const row = await createShareLink(
-        { scope, listId, expiresInDays: days },
+        { scope, listId, expiresInDays: days, note },
         user.id,
       );
       const url = buildShareUrl(row.token);
@@ -100,6 +106,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
         scope,
         list_id: listId ?? null,
         expires_in_days: days,
+        has_note: Boolean(note.trim()),
       });
       try {
         await navigator.clipboard.writeText(url);
@@ -107,6 +114,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
       } catch {
         toast.success("Link gerado");
       }
+      setNote("");
       reload();
     } catch (e) {
       handleSupabaseError(e as { message?: string }, "save");
@@ -136,6 +144,23 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     }
   };
 
+  const startEditNote = (l: ShareLinkRow) => {
+    setEditingNoteId(l.id);
+    setEditingNoteValue(l.note ?? "");
+  };
+
+  const saveNote = async (id: string) => {
+    try {
+      await updateShareLinkNote(id, editingNoteValue);
+      setEditingNoteId(null);
+      setEditingNoteValue("");
+      toast.success("Nota atualizada");
+      reload();
+    } catch (e) {
+      handleSupabaseError(e as { message?: string }, "save");
+    }
+  };
+
   const fmtExpiry = (iso: string | null) => {
     if (!iso) return "Sem expiração";
     const d = new Date(iso);
@@ -157,28 +182,42 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/30 p-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium">Validade</label>
-            <Select value={validity} onValueChange={setValidity}>
-              <SelectTrigger className="h-8 w-44 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {VALIDITY_OPTIONS.map((o) => (
-                  <SelectItem
-                    key={o.label}
-                    value={o.days === null ? "null" : String(o.days)}
-                  >
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium">Validade</label>
+              <Select value={validity} onValueChange={setValidity}>
+                <SelectTrigger className="h-8 w-44 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {VALIDITY_OPTIONS.map((o) => (
+                    <SelectItem
+                      key={o.label}
+                      value={o.days === null ? "null" : String(o.days)}
+                    >
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex min-w-[12rem] flex-1 flex-col gap-1">
+              <label className="text-xs font-medium">
+                Nota (para quem é este link?)
+              </label>
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value.slice(0, 120))}
+                placeholder="Ex.: Cliente João, obra Edise PB"
+                className="h-8 text-xs"
+                maxLength={120}
+              />
+            </div>
+            <Button size="sm" onClick={handleCreate} disabled={creating}>
+              {creating ? "Gerando…" : "Gerar novo link"}
+            </Button>
           </div>
-          <Button size="sm" onClick={handleCreate} disabled={creating}>
-            {creating ? "Gerando…" : "Gerar novo link"}
-          </Button>
         </div>
 
         <div className="space-y-2">
@@ -203,6 +242,39 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                   className="flex items-center gap-2 rounded-md border p-2 text-xs"
                 >
                   <div className="min-w-0 flex-1">
+                    {editingNoteId === l.id ? (
+                      <div className="mb-1 flex items-center gap-1">
+                        <Input
+                          autoFocus
+                          value={editingNoteValue}
+                          onChange={(e) =>
+                            setEditingNoteValue(e.target.value.slice(0, 120))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void saveNote(l.id);
+                            if (e.key === "Escape") setEditingNoteId(null);
+                          }}
+                          placeholder="Nota deste link"
+                          className="h-7 text-xs"
+                          maxLength={120}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => void saveNote(l.id)}
+                          title="Salvar nota"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      l.note && (
+                        <div className="mb-0.5 truncate text-[11px] font-medium text-foreground">
+                          {l.note}
+                        </div>
+                      )
+                    )}
                     <div className="truncate font-mono" title={buildShareUrl(l.token)}>
                       {formatShareUrlDisplay(l.token)}
                     </div>
@@ -224,6 +296,14 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                       <span>· {accessCounts[l.id] ?? 0} acesso(s)</span>
                     </div>
                   </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => startEditNote(l)}
+                    title={l.note ? "Editar nota" : "Adicionar nota"}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"

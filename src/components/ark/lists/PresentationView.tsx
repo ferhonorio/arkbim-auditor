@@ -17,20 +17,32 @@ interface Props {
   lists: ComponentList[];
   initialId?: string;
   onClose: () => void;
+  title?: string;
+  subtitle?: string | null;
+  showClose?: boolean;
 }
 
-export function PresentationView({ lists, initialId, onClose }: Props) {
+export function PresentationView({
+  lists,
+  initialId,
+  onClose,
+  title = "Lista consolidada — apresentação",
+  subtitle = "Visualização limpa e somente leitura para validação com cliente.",
+  showClose = true,
+}: Props) {
   const [active, setActive] = useState<string>(initialId ?? lists[0]?.id ?? "");
 
   if (!lists.length) {
     return (
       <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
         Nenhuma categoria para apresentar.
-        <div className="mt-3">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Sair do modo apresentação
-          </Button>
-        </div>
+        {showClose && (
+          <div className="mt-3">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Sair do modo apresentação
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -39,16 +51,16 @@ export function PresentationView({ lists, initialId, onClose }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">
-            Lista consolidada — apresentação
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Visualização limpa e somente leitura para validação com cliente.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+          {subtitle && (
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          )}
         </div>
-        <Button size="sm" variant="outline" onClick={onClose}>
-          <X className="mr-1 h-3.5 w-3.5" /> Sair do modo apresentação
-        </Button>
+        {showClose && (
+          <Button size="sm" variant="outline" onClick={onClose}>
+            <X className="mr-1 h-3.5 w-3.5" /> Sair do modo apresentação
+          </Button>
+        )}
       </div>
 
       <Tabs value={active} onValueChange={setActive}>

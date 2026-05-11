@@ -1,0 +1,1 @@
+ALTER TABLE public.public_share_links ADD COLUMN IF NOT EXISTS note text;
