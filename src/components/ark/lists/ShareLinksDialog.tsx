@@ -52,10 +52,13 @@ const VALIDITY_OPTIONS: { label: string; days: number | null }[] = [
 export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }: Props) {
   const { user } = useAuth();
   const [validity, setValidity] = useState<string>("15");
+  const [note, setNote] = useState<string>("");
   const [links, setLinks] = useState<ShareLinkRow[]>([]);
   const [accessCounts, setAccessCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteValue, setEditingNoteValue] = useState<string>("");
 
   const reload = async () => {
     setLoading(true);
