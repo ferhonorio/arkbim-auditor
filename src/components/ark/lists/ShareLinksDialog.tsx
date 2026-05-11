@@ -24,11 +24,14 @@ import {
   formatShareUrlDisplay,
   listShareLinks,
   revokeShareLink,
+  updateShareLinkNote,
   type ShareLinkRow,
 } from "@/lib/share-links";
 import { handleSupabaseError } from "@/lib/error-handling";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Pencil, Check } from "lucide-react";
 import { logActivity } from "@/lib/activity-log";
 
 interface Props {
