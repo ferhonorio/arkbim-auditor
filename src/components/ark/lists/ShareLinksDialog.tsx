@@ -242,6 +242,39 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
                   className="flex items-center gap-2 rounded-md border p-2 text-xs"
                 >
                   <div className="min-w-0 flex-1">
+                    {editingNoteId === l.id ? (
+                      <div className="mb-1 flex items-center gap-1">
+                        <Input
+                          autoFocus
+                          value={editingNoteValue}
+                          onChange={(e) =>
+                            setEditingNoteValue(e.target.value.slice(0, 120))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void saveNote(l.id);
+                            if (e.key === "Escape") setEditingNoteId(null);
+                          }}
+                          placeholder="Nota deste link"
+                          className="h-7 text-xs"
+                          maxLength={120}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => void saveNote(l.id)}
+                          title="Salvar nota"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      l.note && (
+                        <div className="mb-0.5 truncate text-[11px] font-medium text-foreground">
+                          {l.note}
+                        </div>
+                      )
+                    )}
                     <div className="truncate font-mono" title={buildShareUrl(l.token)}>
                       {formatShareUrlDisplay(l.token)}
                     </div>
