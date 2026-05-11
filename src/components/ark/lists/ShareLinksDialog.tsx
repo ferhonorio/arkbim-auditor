@@ -144,6 +144,23 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     }
   };
 
+  const startEditNote = (l: ShareLinkRow) => {
+    setEditingNoteId(l.id);
+    setEditingNoteValue(l.note ?? "");
+  };
+
+  const saveNote = async (id: string) => {
+    try {
+      await updateShareLinkNote(id, editingNoteValue);
+      setEditingNoteId(null);
+      setEditingNoteValue("");
+      toast.success("Nota atualizada");
+      reload();
+    } catch (e) {
+      handleSupabaseError(e as { message?: string }, "save");
+    }
+  };
+
   const fmtExpiry = (iso: string | null) => {
     if (!iso) return "Sem expiração";
     const d = new Date(iso);
