@@ -69,6 +69,15 @@ export async function revokeShareLink(id: string) {
   if (error) throw error;
 }
 
+export async function updateShareLinkNote(id: string, note: string | null) {
+  const trimmed = (note ?? "").trim();
+  const { error } = await supabase
+    .from("public_share_links")
+    .update({ note: trimmed ? trimmed.slice(0, 120) : null })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 /**
  * Public share base URL. Always points to the published custom domain
  * (edise.ld.arkbim.com) which is public and does not require login.
