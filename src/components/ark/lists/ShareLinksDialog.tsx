@@ -98,7 +98,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
     try {
       const days = validity === "null" ? null : Number(validity);
       const row = await createShareLink(
-        { scope, listId, expiresInDays: days },
+        { scope, listId, expiresInDays: days, note },
         user.id,
       );
       const url = buildShareUrl(row.token);
@@ -106,6 +106,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
         scope,
         list_id: listId ?? null,
         expires_in_days: days,
+        has_note: Boolean(note.trim()),
       });
       try {
         await navigator.clipboard.writeText(url);
@@ -113,6 +114,7 @@ export function ShareLinksDialog({ open, onOpenChange, scope, listId, listName }
       } catch {
         toast.success("Link gerado");
       }
+      setNote("");
       reload();
     } catch (e) {
       handleSupabaseError(e as { message?: string }, "save");
