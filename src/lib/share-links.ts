@@ -15,12 +15,14 @@ export interface ShareLinkRow {
   is_active: boolean;
   created_at: string;
   created_by: string;
+  note: string | null;
 }
 
 export interface CreateShareLinkInput {
   scope: "all" | "category";
   listId?: string;
   expiresInDays?: number | null;
+  note?: string | null;
 }
 
 export async function createShareLink(input: CreateShareLinkInput, userId: string) {
@@ -28,6 +30,7 @@ export async function createShareLink(input: CreateShareLinkInput, userId: strin
   const expires_at = input.expiresInDays
     ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
     : null;
+  const trimmedNote = (input.note ?? "").trim();
   const payload = {
     token,
     scope: input.scope,
@@ -35,6 +38,7 @@ export async function createShareLink(input: CreateShareLinkInput, userId: strin
     expires_at,
     is_active: true,
     created_by: userId,
+    note: trimmedNote ? trimmedNote.slice(0, 120) : null,
   };
   const { data, error } = await supabase
     .from("public_share_links")
